@@ -1,0 +1,46 @@
+{
+  "name": "Reciclagem Pereque",
+  "short_name": "Reciclagem",
+  "description": "Sistema de gestão para reciclagem com funcionalidade offline-first",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#3b82f6",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Nova Comanda",
+      "short_name": "Comanda",
+      "description": "Criar nova comanda de compra ou venda",
+      "url": "/comanda",
+      "icons": [
+        {
+          "src": "/icon-512.png",
+          "sizes": "512x512"
+        }
+      ]
+    },
+    {
+      "name": "Estoque",
+      "short_name": "Estoque",
+      "description": "Gerenciar materiais e estoque",
+      "url": "/estoque",
+      "icons": [
+        {
+          "src": "/icon-512.png",
+          "sizes": "512x512"
+        }
+      ]
+    }
+  ]
+}
