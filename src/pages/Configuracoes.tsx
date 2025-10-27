@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, Cloud, CloudOff, Save, RefreshCw } from "lucide-react";
+import { ArrowLeft, Settings, Cloud, CloudOff, Save, RefreshCw, Bluetooth } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getSupabaseSettings, saveSupabaseSettings, getComandaPrefix, setComandaPrefix } from "@/services/settings";
 import { onSyncStatus, triggerSyncNow, notifyCredentialsUpdated, type SyncStatus } from "@/services/syncEngine";
 import { count } from "@/database";
+import BluetoothPrinterModal from "@/components/BluetoothPrinterModal";
 
 const Configuracoes = () => {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ const Configuracoes = () => {
   const prevStatusRef = useRef<SyncStatus | null>(null);
   const [codigoPrefix, setCodigoPrefix] = useState("");
   const [prefixSaving, setPrefixSaving] = useState(false);
+  const [isBluetoothModalOpen, setIsBluetoothModalOpen] = useState(false);
 
   useEffect(() => {
     // Load saved settings
@@ -135,6 +137,15 @@ const Configuracoes = () => {
           </Button>
           <h1 className="text-2xl font-bold text-foreground">Configurações</h1>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsBluetoothModalOpen(true)}
+          className="flex items-center gap-2"
+        >
+          <Bluetooth className="h-4 w-4" />
+          <span className="hidden sm:inline">Impressora</span>
+        </Button>
       </div>
 
       {/* Supabase Config */}
@@ -227,6 +238,12 @@ const Configuracoes = () => {
           </div>
         </div>
       </Card>
+
+      {/* Bluetooth Printer Modal */}
+      <BluetoothPrinterModal
+        isOpen={isBluetoothModalOpen}
+        onClose={() => setIsBluetoothModalOpen(false)}
+      />
 
     </div>
   );

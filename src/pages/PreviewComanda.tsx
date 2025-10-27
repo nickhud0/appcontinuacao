@@ -16,6 +16,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generateAndSaveComandaA4Pdf } from "@/services/pdf/generateComandaA4";
+import { usePrintComanda } from "@/hooks/usePrintComanda";
 
 type ComandaHeader = {
   comanda_id: number | null;
@@ -45,6 +46,7 @@ const PreviewComanda = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [whatsAppNumber, setWhatsAppNumber] = useState("");
   const { toast } = useToast();
+  const { isPrinting, printComanda } = usePrintComanda();
   const receiptRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
@@ -554,8 +556,28 @@ const PreviewComanda = () => {
           }}>
             PDF
           </button>
-          <button className="flex-1 py-3 rounded-lg bg-gray-700 text-white font-semibold text-base shadow-sm active:scale-95">
-            Imprimir
+          <button 
+            className="flex-1 py-3 rounded-lg bg-gray-700 text-white font-semibold text-base shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={async () => {
+              try {
+                await printComanda({
+                  header: {
+                    codigo: header?.codigo ?? null,
+                    comanda_data: header?.comanda_data ?? null,
+                    comanda_tipo: header?.comanda_tipo ?? null,
+                    observacoes: header?.observacoes ?? null,
+                  },
+                  groupedItens,
+                  total: Number(totalCalculado) || 0,
+                });
+              } catch (error) {
+                // Erro já tratado no hook
+                console.error('Erro na impressão:', error);
+              }
+            }}
+            disabled={isPrinting}
+          >
+            {isPrinting ? "Imprimindo..." : "Imprimir"}
           </button>
         </div>
       </div>
