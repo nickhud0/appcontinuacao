@@ -211,6 +211,11 @@ const Pendencias = () => {
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
                     <div className="text-lg sm:text-xl font-semibold text-foreground truncate">{p.nome}</div>
+                    {p.observacao && (
+                      <div className="text-sm text-blue-700 whitespace-pre-wrap break-words mt-1">
+                        {p.observacao}
+                      </div>
+                    )}
                     <div className="text-sm sm:text-base text-muted-foreground mt-0.5">
                       {formatCurrency(Number(p.valor) || 0)} • {(p.tipo === 'a_pagar' ? 'A pagar' : 'A receber')} • {new Date(p.data).toLocaleString()}
                     </div>
