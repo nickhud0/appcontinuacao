@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { addToSyncQueue, selectAll, selectWhere } from "@/database";
+import { triggerSyncNow } from "@/services/syncEngine";
 import { formatCurrency } from "@/utils/formatters";
 import { logger } from "@/utils/logger";
 import {
@@ -50,6 +51,13 @@ const CadastrarDespesa = () => {
 
       // record_id vazio para não tentar atualizar item local inexistente
       await addToSyncQueue('despesa', 'INSERT', '', payload);
+
+      // Sincronização automática após salvar
+      try {
+        await triggerSyncNow(); // se online → sincroniza agora, se offline → ignora sem erro
+      } catch (e) {
+        // não interromper o fluxo, mesma lógica da sessão Pendências
+      }
 
       // success toast removed to keep UI silent
       // UX: permanecer na página para cadastrar múltiplas despesas
