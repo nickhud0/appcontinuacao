@@ -274,6 +274,11 @@ const Compra = () => {
                   step="0.01"
                   value={precoPersonalizado}
                   onChange={(e) => setPrecoPersonalizado(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleAdicionar();
+                    }
+                  }}
                   placeholder="Digite o preço"
                 />
               </div>
@@ -288,6 +293,11 @@ const Compra = () => {
                   step="0.01"
                   value={desconto}
                   onChange={(e) => setDesconto(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleAdicionar();
+                    }
+                  }}
                   placeholder="Digite o desconto"
                 />
               </div>
