@@ -249,7 +249,10 @@ const Venda = () => {
                 <Input 
                   id="peso"
                   type="number"
+                  inputMode="decimal"
+                  pattern="[0-9]*"
                   step="0.01"
+                  autoFocus={true}
                   value={peso}
                   onChange={(e) => setPeso(e.target.value)}
                   placeholder="Digite o peso"
@@ -261,6 +264,8 @@ const Venda = () => {
                 <Input 
                   id="preco"
                   type="number"
+                  inputMode="decimal"
+                  pattern="[0-9]*"
                   step="0.01"
                   value={precoPersonalizado}
                   onChange={(e) => setPrecoPersonalizado(e.target.value)}
@@ -273,6 +278,8 @@ const Venda = () => {
                 <Input 
                   id="desconto"
                   type="number"
+                  inputMode="decimal"
+                  pattern="[0-9]*"
                   step="0.01"
                   value={desconto}
                   onChange={(e) => setDesconto(e.target.value)}

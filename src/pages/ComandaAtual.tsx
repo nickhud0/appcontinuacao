@@ -546,7 +546,10 @@ const ComandaAtual = () => {
               <Input 
                 id="novaQuantidade"
                 type="number"
+                inputMode="decimal"
+                pattern="[0-9]*"
                 step="0.01"
+                autoFocus={true}
                 value={novaQuantidade}
                 onChange={(e) => setNovaQuantidade(e.target.value)}
                 placeholder="Digite a quantidade"
@@ -559,6 +562,8 @@ const ComandaAtual = () => {
               <Input 
                 id="novoPreco"
                 type="number"
+                inputMode="decimal"
+                pattern="[0-9]*"
                 step="0.01"
                 value={novoPreco}
                 onChange={(e) => setNovoPreco(e.target.value)}
