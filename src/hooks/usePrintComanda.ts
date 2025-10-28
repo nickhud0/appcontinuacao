@@ -129,39 +129,49 @@ export const usePrintComanda = () => {
     console.log('[PRINT] Gerando comandos ESC/POS...');
     const encoder = new EscPosEncoder();
     
-    // Configurações iniciais
+    // Helper para formatar linha com colunas (32 caracteres para impressora 58mm)
+    const formatLine = (left: string, middle: string, right: string, width: number = 32): string => {
+      const totalSpaces = width - (left.length + middle.length + right.length);
+      const leftSpaces = 2; // Espaço mínimo entre colunas
+      const rightSpaces = Math.max(1, totalSpaces - leftSpaces);
+      return left + ' '.repeat(leftSpaces) + middle + ' '.repeat(rightSpaces) + right;
+    };
+    
+    // Truncar texto se necessário
+    const truncate = (text: string, maxLength: number): string => {
+      return text.length > maxLength ? text.substring(0, maxLength) : text;
+    };
+
+    // Separador de 32 caracteres
+    const separator = '--------------------------------';
+
+    // Configurações iniciais e cabeçalho
     encoder
       .initialize()
-      .align('center')
-      .size(2, 2)
-      .text('Reciclagem Pereque')
-      .newline()
-      .size(1, 1)
-      .text('Ubatuba, Pereque Mirim, Av Marginal, 2504')
-      .newline()
-      .text('12 99162-0321')
-      .newline()
-      .text('CNPJ/PIX - 45.492.161/0001-88')
-      .newline()
-      .newline()
       .align('left')
-      .text('--------------------------------')
+      .text('Reciclagem Perequê')
       .newline()
+      .text('Ubatuba - SP')
+      .newline()
+      .text('Tel: 12 99162-0321')
+      .newline()
+      .text('CNPJ/PIX 45.492.161/0001-88')
+      .newline()
+      .text(separator)
       .newline();
 
-    // Dados da comanda
+    // Número da comanda
     encoder
-      .text(`Comanda: ${data.header.codigo || '—'}`)
+      .text(`COMANDA Nº ${data.header.codigo || '---'}`)
       .newline()
-      .text(`Data: ${data.header.comanda_data ? new Date(data.header.comanda_data).toLocaleDateString('pt-BR') : '—'}`)
+      .text(separator)
+      .newline();
+
+    // Cabeçalho da tabela
+    encoder
+      .text(formatLine('Item', 'KG', 'Total', 32))
       .newline()
-      .text(`Horário: ${data.header.comanda_data ? new Date(data.header.comanda_data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—'}`)
-      .newline()
-      .text(`Tipo: ${(data.header.comanda_tipo || '—').toUpperCase()}`)
-      .newline()
-      .newline()
-      .text('--------------------------------')
-      .newline()
+      .text(separator)
       .newline();
 
     // Itens
@@ -169,42 +179,34 @@ export const usePrintComanda = () => {
       encoder.text('Nenhum item').newline();
     } else {
       data.groupedItens.forEach((item) => {
-        encoder
-          .text(item.nome)
-          .newline()
-          .text(`  ${item.kg.toFixed(2)}x R$ ${item.precoMedio.toFixed(2)}`)
-          .align('right')
-          .text(`R$ ${item.total.toFixed(2)}`)
-          .align('left')
-          .newline();
+        const nomeItem = truncate(item.nome, 15); // Truncar nome se muito longo
+        const kgStr = item.kg.toFixed(2);
+        const totalStr = item.total.toFixed(2);
+        
+        const linha = formatLine(nomeItem, kgStr, totalStr, 32);
+        encoder.text(linha).newline();
       });
     }
 
+    // Separador antes do total
     encoder
+      .text(separator)
+      .newline();
+
+    // Total (com bold)
+    encoder
+      .bold(true)
+      .text(`TOTAL: R$${data.total.toFixed(2)}`)
+      .bold(false)
       .newline()
-      .text('--------------------------------')
+      .text(separator)
+      .newline();
+
+    // Rodapé
+    encoder
+      .text('Obrigado pela preferência!')
       .newline()
-      .newline()
-      .align('center')
-      .size(2, 2)
-      .text('TOTAL:')
-      .newline()
-      .text(`R$ ${data.total.toFixed(2)}`)
-      .newline()
-      .newline()
-      .size(1, 1)
-      .text('--------------------------------')
-      .newline()
-      .newline()
-      .align('center')
-      .text('Obrigado')
-      .newline()
-      .size(2, 2)
-      .text('DEUS SEJA LOUVADO!!!')
-      .newline()
-      .newline()
-      .size(1, 1)
-      .text('Versao 1.0')
+      .text('Deus seja louvado!!!!')
       .newline()
       .newline()
       .newline()
