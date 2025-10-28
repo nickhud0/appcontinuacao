@@ -1,5 +1,6 @@
 import { ArrowLeft, FileText, Plus, Trash2, Edit, Calculator, ShoppingCart, DollarSign } from "lucide-react";
 import { Device } from '@capacitor/device';
+import { App } from '@capacitor/app';
 import { useNavigate } from "react-router-dom";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -35,7 +36,9 @@ const ComandaAtual = () => {
   const [comanda, setComanda] = useState<Comanda | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ComandaItem | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<ComandaItem | null>(null);
   const [editQuantidade, setEditQuantidade] = useState("");
   const [editPreco, setEditPreco] = useState("");
   const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
@@ -60,6 +63,17 @@ const ComandaAtual = () => {
       setComanda(JSON.parse(comandaStorage));
     }
   }, []);
+
+  // Configurar botão "Voltar" nativo do Android para ir ao menu inicial
+  useEffect(() => {
+    const backHandler = App.addListener('backButton', () => {
+      navigate('/');
+    });
+    
+    return () => {
+      backHandler.remove();
+    };
+  }, [navigate]);
 
   const updateComanda = (novaComanda: Comanda) => {
     setComanda(novaComanda);
@@ -96,16 +110,23 @@ const ComandaAtual = () => {
     // success toast removed to keep UI silent
   };
 
-  const handleDeleteItem = (itemId: number) => {
-    if (!comanda) return;
+  const handleOpenDeleteDialog = (item: ComandaItem) => {
+    setItemToDelete(item);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!itemToDelete || !comanda) return;
 
     const novaComanda = {
       ...comanda,
-      itens: comanda.itens.filter(item => item.id !== itemId)
+      itens: comanda.itens.filter(item => item.id !== itemToDelete.id)
     };
     novaComanda.total = novaComanda.itens.reduce((acc, item) => acc + item.total, 0);
 
     updateComanda(novaComanda);
+    setIsDeleteDialogOpen(false);
+    setItemToDelete(null);
     // success toast removed to keep UI silent
   };
 
@@ -223,7 +244,7 @@ const ComandaAtual = () => {
         {/* Header */}
         <div className="sticky top-0 bg-background border-b p-3 z-10">
           <div className="flex items-center">
-            <Button variant="ghost" size="sm" className="mr-2" onClick={() => navigate(-1)}>
+            <Button variant="ghost" size="sm" className="mr-2" onClick={() => navigate('/')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <h1 className="text-lg font-bold text-foreground">Comanda Atual</h1>
@@ -260,7 +281,7 @@ const ComandaAtual = () => {
       <div className="sticky top-0 bg-background border-b p-3 z-10">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center">
-            <Button variant="ghost" size="sm" className="mr-2" onClick={() => navigate(-1)}>
+            <Button variant="ghost" size="sm" className="mr-2" onClick={() => navigate('/')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <h1 className="text-lg font-bold text-foreground">Comanda Atual</h1>
@@ -318,6 +339,22 @@ const ComandaAtual = () => {
                   <h3 className="font-semibold text-foreground text-base leading-tight flex-1 pr-3">
                     {item.material}
                   </h3>
+                  <div className="flex gap-2 items-center">
+                    <button
+                      onClick={() => handleEditItem(item)}
+                      className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded transition-colors"
+                      title="Editar item"
+                    >
+                      <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    </button>
+                    <button
+                      onClick={() => handleOpenDeleteDialog(item)}
+                      className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+                      title="Excluir item"
+                    >
+                      <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                    </button>
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="bg-muted/30 p-2 rounded">
@@ -386,6 +423,7 @@ const ComandaAtual = () => {
                   id="quantidade"
                   type="number"
                   step="0.01"
+                  min="0"
                   value={editQuantidade}
                   onChange={(e) => setEditQuantidade(e.target.value)}
                   placeholder="Digite a quantidade"
@@ -398,6 +436,7 @@ const ComandaAtual = () => {
                   id="preco"
                   type="number"
                   step="0.01"
+                  min="0"
                   value={editPreco}
                   onChange={(e) => setEditPreco(e.target.value)}
                   placeholder="Digite o preço"
@@ -405,10 +444,10 @@ const ComandaAtual = () => {
               </div>
               
               {/* Subtotal Section */}
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-4">
+              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4 mt-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-lg text-green-700 font-semibold">Subtotal</p>
-                  <p className="text-3xl font-black text-green-800">
+                  <p className="text-lg text-green-700 dark:text-green-300 font-semibold">Subtotal</p>
+                  <p className="text-3xl font-black text-green-800 dark:text-green-200">
                     {formatCurrency(calcularSubtotalEdit())}
                   </p>
                 </div>
@@ -419,6 +458,50 @@ const ComandaAtual = () => {
                   Salvar
                 </Button>
                 <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Confirmação de Exclusão */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-sm mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-center text-red-600 dark:text-red-400">Confirmar Exclusão</DialogTitle>
+          </DialogHeader>
+          
+          {itemToDelete && (
+            <div className="space-y-4">
+              <div className="bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                <p className="text-center text-foreground mb-3">
+                  Deseja realmente excluir este item da comanda?
+                </p>
+                <div className="bg-background/50 p-3 rounded">
+                  <p className="font-semibold text-center text-base">{itemToDelete.material}</p>
+                  <p className="text-sm text-muted-foreground text-center mt-1">
+                    {formatNumber(itemToDelete.quantidade)}kg × {formatCurrency(parseFloat(formatNumber(itemToDelete.preco)))} = {formatCurrency(parseFloat(formatNumber(itemToDelete.total)))}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex flex-col gap-2">
+                <Button 
+                  onClick={handleConfirmDelete} 
+                  className="w-full bg-red-600 hover:bg-red-700 text-white"
+                >
+                  Confirmar Exclusão
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsDeleteDialogOpen(false);
+                    setItemToDelete(null);
+                  }} 
+                  className="w-full"
+                >
                   Cancelar
                 </Button>
               </div>
