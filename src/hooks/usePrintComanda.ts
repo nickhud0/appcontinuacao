@@ -129,12 +129,19 @@ export const usePrintComanda = () => {
     console.log('[PRINT] Gerando comandos ESC/POS...');
     const encoder = new EscPosEncoder();
     
-    // Helper para formatar linha com colunas (32 caracteres para impressora 58mm)
-    const formatLine = (left: string, middle: string, right: string, width: number = 32): string => {
-      const totalSpaces = width - (left.length + middle.length + right.length);
-      const leftSpaces = 2; // Espaço mínimo entre colunas
-      const rightSpaces = Math.max(1, totalSpaces - leftSpaces);
-      return left + ' '.repeat(leftSpaces) + middle + ' '.repeat(rightSpaces) + right;
+    // Capturar data e hora atual
+    const now = new Date();
+    const dataAtual = now.toLocaleDateString('pt-BR');
+    const horaAtual = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    
+    // Helper para formatar colunas fixas (32 caracteres para impressora 58mm)
+    const formatColumns = (item: string, kg: string, preco: string, total: string): string => {
+      return (
+        item.padEnd(10) +
+        kg.padEnd(6) +
+        preco.padEnd(7) +
+        total.padStart(5)
+      );
     };
     
     // Truncar texto se necessário
@@ -149,6 +156,7 @@ export const usePrintComanda = () => {
     encoder
       .initialize()
       .align('left')
+      .size(1, 1) // Fonte pequena para melhor encaixe
       .text('Reciclagem Perequê')
       .newline()
       .text('Ubatuba - SP')
@@ -156,6 +164,8 @@ export const usePrintComanda = () => {
       .text('Tel: 12 99162-0321')
       .newline()
       .text('CNPJ/PIX 45.492.161/0001-88')
+      .newline()
+      .text(`Data: ${dataAtual}  Hora: ${horaAtual}`)
       .newline()
       .text(separator)
       .newline();
@@ -167,9 +177,9 @@ export const usePrintComanda = () => {
       .text(separator)
       .newline();
 
-    // Cabeçalho da tabela
+    // Cabeçalho da tabela com 4 colunas
     encoder
-      .text(formatLine('Item', 'KG', 'Total', 32))
+      .text('Item         KG   Preço   Total')
       .newline()
       .text(separator)
       .newline();
@@ -179,11 +189,12 @@ export const usePrintComanda = () => {
       encoder.text('Nenhum item').newline();
     } else {
       data.groupedItens.forEach((item) => {
-        const nomeItem = truncate(item.nome, 15); // Truncar nome se muito longo
+        const nomeItem = truncate(item.nome, 10); // Truncar nome para 10 caracteres
         const kgStr = item.kg.toFixed(2);
+        const precoStr = item.precoMedio.toFixed(2);
         const totalStr = item.total.toFixed(2);
         
-        const linha = formatLine(nomeItem, kgStr, totalStr, 32);
+        const linha = formatColumns(nomeItem, kgStr, precoStr, totalStr);
         encoder.text(linha).newline();
       });
     }
@@ -193,10 +204,10 @@ export const usePrintComanda = () => {
       .text(separator)
       .newline();
 
-    // Total (com bold)
+    // Total (com bold e espaço após R$)
     encoder
       .bold(true)
-      .text(`TOTAL: R$${data.total.toFixed(2)}`)
+      .text(`TOTAL: R$ ${data.total.toFixed(2)}`)
       .bold(false)
       .newline()
       .text(separator)
