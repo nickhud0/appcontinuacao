@@ -42,6 +42,11 @@ const ComandaAtual = () => {
   const [novaQuantidade, setNovaQuantidade] = useState("");
   const [novoPreco, setNovoPreco] = useState("");
 
+  // Helper para formatar números com 2 casas decimais
+  const formatNumber = (value: number): string => {
+    return value.toFixed(2);
+  };
+
   // Calculate subtotal in real-time for edit dialog
   const calcularSubtotalEdit = () => {
     const quantidade = parseFloat(editQuantidade) || 0;
@@ -139,27 +144,8 @@ const ComandaAtual = () => {
     // success toast removed to keep UI silent
   };
 
-  // Agrupar itens visualmente por material com preço médio ponderado
-  const groupedItens = useMemo(() => {
-    if (!comanda || !Array.isArray(comanda.itens)) return [] as Array<{ material: string; kg_total: number; valor_total: number; preco_medio: number; ids: number[] }>;
-    const map = new Map<string, { kg: number; total: number; ids: number[] }>();
-    for (const it of comanda.itens) {
-      const key = it.material || '—';
-      const prev = map.get(key) || { kg: 0, total: 0, ids: [] as number[] };
-      prev.kg += Number(it.quantidade) || 0;
-      prev.total += Number(it.total) || 0;
-      prev.ids.push(it.id);
-      map.set(key, prev);
-    }
-    const result: Array<{ material: string; kg_total: number; valor_total: number; preco_medio: number; ids: number[] }> = [];
-    for (const [material, v] of map.entries()) {
-      const kg = v.kg;
-      const total = v.total;
-      const precoMedio = kg > 0 ? Number((total / kg).toFixed(2)) : 0;
-      result.push({ material, kg_total: kg, valor_total: total, preco_medio: precoMedio, ids: v.ids });
-    }
-    return result;
-  }, [comanda]);
+  // Não agrupar itens - mostrar cada inserção separadamente
+  // (Para manter a tela "Comanda Atual" diferente de Preview/PDF que agrupam)
 
   const handleFinalizarComanda = async () => {
     if (!comanda || comanda.itens.length === 0) return;
@@ -323,29 +309,28 @@ const ComandaAtual = () => {
           </div>
         </Card>
 
-        {/* Lista de Itens Agrupados - Responsiva */}
+        {/* Lista de Itens - Sem agrupamento, cada inserção separada */}
         <div className="space-y-4 mb-6">
-          {groupedItens.map((g) => (
-            <Card key={g.material} className="p-4">
+          {comanda.itens.map((item) => (
+            <Card key={item.id} className="p-4">
               <div className="space-y-3">
                 <div className="flex justify-between items-start">
                   <h3 className="font-semibold text-foreground text-base leading-tight flex-1 pr-3">
-                    {g.material}
+                    {item.material}
                   </h3>
-                  <div className="text-xs text-muted-foreground whitespace-nowrap">{g.ids.length} item{g.ids.length !== 1 ? 's' : ''}</div>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-sm">
                   <div className="bg-muted/30 p-2 rounded">
                     <span className="text-muted-foreground text-xs block">Kg total</span>
-                    <span className="font-semibold text-base">{g.kg_total}kg</span>
+                    <span className="font-semibold text-base">{formatNumber(item.quantidade)}kg</span>
                   </div>
                   <div className="bg-muted/30 p-2 rounded">
-                    <span className="text-muted-foreground text-xs block">Preço/kg médio</span>
-                    <span className="font-semibold text-base">{formatCurrency(g.preco_medio)}</span>
+                    <span className="text-muted-foreground text-xs block">Preço/kg</span>
+                    <span className="font-semibold text-base">{formatCurrency(parseFloat(formatNumber(item.preco)))}</span>
                   </div>
                   <div className="bg-muted/30 p-2 rounded">
                     <span className="text-muted-foreground text-xs block">Total</span>
-                    <span className="font-bold text-base text-primary">{formatCurrency(g.valor_total)}</span>
+                    <span className="font-bold text-base text-primary">{formatCurrency(parseFloat(formatNumber(item.total)))}</span>
                   </div>
                 </div>
               </div>
@@ -358,7 +343,7 @@ const ComandaAtual = () => {
           <div className="flex justify-between items-center">
             <span className="text-base font-semibold text-foreground">Total da Comanda:</span>
             <span className="text-2xl font-bold text-primary">
-              {formatCurrency(comanda.total)}
+              {formatCurrency(parseFloat(formatNumber(comanda.total)))}
             </span>
           </div>
         </Card>
