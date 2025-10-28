@@ -63,6 +63,39 @@ const PreviewComanda = () => {
   useEffect(() => {
     async function loadLatestComanda() {
       try {
+        // PRIORIDADE 1: Verificar se existe comanda finalizada no localStorage
+        const ultimaComandaData = localStorage.getItem("ultimaComandaFinalizada");
+        if (ultimaComandaData) {
+          try {
+            const comandaFinalizada = JSON.parse(ultimaComandaData);
+            
+            // Converter formato da comanda finalizada para o formato esperado pelo PreviewComanda
+            setHeader({
+              comanda_id: null,
+              comanda_data: new Date().toISOString(),
+              codigo: null,
+              comanda_tipo: comandaFinalizada.tipo,
+              observacoes: null,
+              comanda_total: comandaFinalizada.total,
+            });
+
+            setItens(comandaFinalizada.itens.map((item: any, idx: number) => ({
+              item_id: idx + 1,
+              material_id: null,
+              material_nome: item.material,
+              preco_kg: item.preco,
+              kg_total: item.quantidade,
+              item_valor_total: item.total,
+            })));
+
+            setLoading(false);
+            return; // Sair da função, não buscar no histórico
+          } catch (error) {
+            console.error('Erro ao parsear comanda finalizada:', error);
+            // Continuar para o comportamento padrão se houver erro
+          }
+        }
+
         setLoading(true);
         
         // COPIAR EXATAMENTE A LÓGICA DO HISTÓRICO DE COMANDAS
@@ -267,6 +300,11 @@ const PreviewComanda = () => {
 
         // PEGAR A PRIMEIRA (MAIS RECENTE) - EXATAMENTE COMO NO HISTÓRICO
         const latestComanda = unifiedGroups[0];
+        
+        // Limpar comanda finalizada do localStorage quando ela aparecer no histórico
+        if (latestComanda && localStorage.getItem("ultimaComandaFinalizada")) {
+          localStorage.removeItem("ultimaComandaFinalizada");
+        }
         
         if (latestComanda) {
           setHeader({

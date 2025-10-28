@@ -230,6 +230,7 @@ const ComandaAtual = () => {
       } catch {}
 
       // success toast removed to keep UI silent
+      localStorage.setItem("ultimaComandaFinalizada", JSON.stringify(comanda));
 
       handleLimparComanda();
       navigate('/');
