@@ -255,6 +255,11 @@ const Compra = () => {
                   autoFocus={true}
                   value={peso}
                   onChange={(e) => setPeso(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      handleAdicionar();
+                    }
+                  }}
                   placeholder="Digite o peso"
                 />
               </div>
