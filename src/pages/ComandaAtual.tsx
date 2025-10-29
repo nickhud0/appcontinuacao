@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/utils/formatters";
 import { insert, addToSyncQueue } from "@/database";
 import { getSyncStatus, triggerSyncNow } from "@/services/syncEngine";
-import { getComandaPrefix, nextComandaSequence, buildComandaCodigo } from "@/services/settings";
+import { getComandaPrefix, setComandaPrefix, nextComandaSequence, buildComandaCodigo } from "@/services/settings";
 
 interface ComandaItem {
   id: number;
@@ -184,7 +184,14 @@ const ComandaAtual = () => {
       // Create a local synthetic comanda id and codigo to correlate pending inserts in Historico
       const localComandaId = Date.now();
       // Build codigo using saved prefix and per-prefix sequence
-      const prefix = getComandaPrefix();
+      let prefix = getComandaPrefix();
+      if (!prefix || prefix.trim() === "") {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        const newPrefix = Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+        setComandaPrefix(newPrefix);
+        // atualizar variável prefix no escopo local
+        prefix = newPrefix;
+      }
       const sequence = nextComandaSequence(prefix);
       const codigo = `${prefix || ''}${sequence}`;
 
