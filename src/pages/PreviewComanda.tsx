@@ -73,7 +73,7 @@ const PreviewComanda = () => {
             setHeader({
               comanda_id: null,
               comanda_data: new Date().toISOString(),
-              codigo: null,
+              codigo: comandaFinalizada.codigo ?? null,
               comanda_tipo: comandaFinalizada.tipo,
               observacoes: null,
               comanda_total: comandaFinalizada.total,

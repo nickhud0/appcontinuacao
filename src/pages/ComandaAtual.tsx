@@ -195,6 +195,9 @@ const ComandaAtual = () => {
       const sequence = nextComandaSequence(prefix);
       const codigo = `${prefix || ''}${sequence}`;
 
+      // Adicionar código à comanda antes de salvar no localStorage
+      comanda.codigo = codigo;
+
       // Enqueue the comanda itself with its tipo so Historico can show "Tipo: Compra/Venda"
       try {
         await addToSyncQueue('comanda', 'INSERT', String(localComandaId), {
