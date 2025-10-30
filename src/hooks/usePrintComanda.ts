@@ -134,16 +134,6 @@ export const usePrintComanda = () => {
     const dataAtual = now.toLocaleDateString('pt-BR');
     const horaAtual = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     
-    // Helper para formatar colunas fixas (32 caracteres para impressora 58mm)
-    const formatColumns = (item: string, kg: string, preco: string, total: string): string => {
-      return (
-        item.padEnd(10) +
-        kg.padEnd(6) +
-        preco.padEnd(7) +
-        total.padStart(5)
-      );
-    };
-    
     // Truncar texto se necessário
     const truncate = (text: string, maxLength: number): string => {
       return text.length > maxLength ? text.substring(0, maxLength) : text;
@@ -177,9 +167,15 @@ export const usePrintComanda = () => {
       .text(separator)
       .newline();
 
-    // Cabeçalho da tabela com 4 colunas
+    // Cabeçalho da tabela com 4 colunas alinhadas
+    const headerLine = 
+      "Item".padEnd(14) +
+      "KG".padStart(5) +
+      "Preço".padStart(7) +
+      "Total".padStart(8);
+    
     encoder
-      .text('Item         KG   Preço   Total')
+      .text(headerLine)
       .newline()
       .text(separator)
       .newline();
@@ -189,12 +185,17 @@ export const usePrintComanda = () => {
       encoder.text('Nenhum item').newline();
     } else {
       data.groupedItens.forEach((item) => {
-        const nomeItem = truncate(item.nome, 10); // Truncar nome para 10 caracteres
-        const kgStr = item.kg.toFixed(2);
-        const precoStr = item.precoMedio.toFixed(2);
-        const totalStr = item.total.toFixed(2);
+        const nomeItem = truncate(item.nome, 14); // Truncar nome para 14 caracteres
+        const kg = parseFloat(item.kg.toString()).toFixed(1); // 1 casa decimal
+        const preco = parseFloat(item.precoMedio.toString()).toFixed(1); // 1 casa decimal
+        const total = parseFloat(item.total.toString()).toFixed(2); // 2 casas decimais
         
-        const linha = formatColumns(nomeItem, kgStr, precoStr, totalStr);
+        const colItem = nomeItem.padEnd(14);
+        const colKg = kg.toString().padStart(5);
+        const colPreco = preco.toString().padStart(7);
+        const colTotal = total.toString().padStart(8);
+        
+        const linha = `${colItem}${colKg}${colPreco}${colTotal}`;
         encoder.text(linha).newline();
       });
     }
