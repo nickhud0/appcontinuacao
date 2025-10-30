@@ -308,6 +308,14 @@ async function pushPending(): Promise<void> {
               .upsert(remote, { onConflict: 'id' })
               .select());
           }
+        } else if (table === 'pendencia' && op === 'UPDATE') {
+          // Trata UPDATE de pendência que já está sincronizada
+          const updateData = JSON.parse(item.payload);
+          ({ data, error } = await client
+            .from('pendencia')
+            .update(updateData)
+            .eq('id', recordId)
+            .select());
         } else {
           ({ data, error } = await client
             .from(table)
