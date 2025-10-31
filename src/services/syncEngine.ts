@@ -114,9 +114,12 @@ async function pushPending(): Promise<void> {
       logger.error('Invalid JSON payload in sync_queue id=' + item.id);
       continue;
     }
+    
+    console.log('[SYNC-DEBUG]', { table, op, recordId, payload });
 
     // Local-only entries: do not push to Supabase; mark and remove from queue
     if (table === 'ultimas_20') {
+      console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'SKIPPING_ULTIMAS_20' });
       try {
         await markSyncItemAsSynced(item.id);
       } catch (e) {
@@ -286,6 +289,7 @@ async function pushPending(): Promise<void> {
           }
         } else if (table === 'pendencia_false') {
           // Map pendencia_false (local pending view) to Supabase 'pendencia'
+          console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PROCESSING_PENDENCIA_FALSE', payload });
           const remote: Record<string, any> = {};
           if (payload.id != null) remote.id = payload.id;
           if (payload.data != null) remote.data = payload.data;
@@ -297,26 +301,53 @@ async function pushPending(): Promise<void> {
           if (payload.criado_por != null) remote.criado_por = payload.criado_por;
           if (payload.atualizado_por != null) remote.atualizado_por = payload.atualizado_por;
 
+          console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_REMOTE_OBJECT', remote });
+
           if (op === 'INSERT') {
+            console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_INSERT_START' });
             ({ data, error } = await client
               .from('pendencia')
               .insert(remote)
               .select());
+            console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_INSERT_RESULT', data, error });
           } else {
+            console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_UPSERT_START' });
             ({ data, error } = await client
               .from('pendencia')
               .upsert(remote, { onConflict: 'id' })
               .select());
+            console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_UPSERT_RESULT', data, error });
           }
         } else if (table === 'pendencia' && op === 'UPDATE') {
           // Trata UPDATE de pendência que já está sincronizada
+          console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_UPDATE' });
           const updateData = JSON.parse(item.payload);
           ({ data, error } = await client
             .from('pendencia')
             .update(updateData)
             .eq('id', recordId)
             .select());
+        } else if (table === 'pendencia' && op === 'INSERT') {
+          // Trata INSERT de pendência nova
+          console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_INSERT_START', payload });
+          const remote: Record<string, any> = {};
+          if (payload.data != null) remote.data = payload.data;
+          if (payload.status != null) remote.status = !!payload.status;
+          if (payload.nome != null) remote.nome = payload.nome;
+          if (payload.valor != null) remote.valor = Number(payload.valor) || 0;
+          if (payload.tipo != null) remote.tipo = payload.tipo; // enum pendencia_tipo
+          if (payload.observacao != null) remote.observacao = payload.observacao;
+          if (payload.criado_por != null) remote.criado_por = payload.criado_por;
+          if (payload.atualizado_por != null) remote.atualizado_por = payload.atualizado_por;
+          
+          console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_INSERT_REMOTE', remote });
+          ({ data, error } = await client
+            .from('pendencia')
+            .insert(remote)
+            .select());
+          console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'PENDENCIA_INSERT_RESULT', data, error });
         } else {
+          console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'FALLBACK_GENERIC_UPSERT', payload });
           ({ data, error } = await client
             .from(table)
             .upsert(payload)
@@ -362,6 +393,7 @@ async function pushPending(): Promise<void> {
         // skip unknown operations but don't mark as synced
       }
     } catch (err) {
+      console.log('[SYNC-DEBUG]', { table, op, recordId, action: 'ERROR', error: err });
       logger.error('❌ Push failed', { table, op, recordId, error: err });
       // Stop processing further to avoid hammering; leave remaining in queue
       // Alternatively, continue to try others; we choose continue

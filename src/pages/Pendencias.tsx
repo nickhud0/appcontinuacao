@@ -52,7 +52,9 @@ const Pendencias = () => {
   async function loadItems() {
     try {
       const confirmadas = await selectWhere<any>('pendencia_false', 'status = ?', [0], 'data DESC');
-      const pendentesRows = await selectWhere<any>('sync_queue', 'synced = ? AND table_name = ? AND operation = ?', [0, 'pendencia_false', 'INSERT'], 'created_at DESC');
+      
+      // Buscar pendências pendentes na sync_queue: table_name='pendencia' AND operation='INSERT' AND synced=0
+      const pendentesRows = await selectWhere<any>('sync_queue', 'synced = ? AND table_name = ? AND operation = ?', [0, 'pendencia', 'INSERT'], 'created_at DESC');
       const pendentes = (pendentesRows || []).map((row: any) => {
         let payload: any = {};
         try {
@@ -61,16 +63,20 @@ const Pendencias = () => {
         } catch {}
         return {
           id: `pending-${row.id}`,
-          record_id: row.record_id,
+          record_id: row.record_id || '',
           data: payload.data || row.created_at,
-          status: 0,
+          status: payload.status !== undefined ? payload.status : 0,
           nome: payload.nome || '(sem nome)',
           valor: Number(payload.valor) || 0,
           tipo: payload.tipo || 'a_pagar',
           observacao: payload.observacao || null,
-          __pending: true
+          criado_por: payload.criado_por || 'local-user',
+          atualizado_por: payload.atualizado_por || 'local-user',
+          __pending: true,
+          origem_offline: 1
         };
       });
+      
       const pendingRecordIds = new Set<string>((pendentes || []).map((p: any) => String(p.record_id || '')));
       const confirmadasSemDuplicatas = (confirmadas || []).filter((c: any) => !pendingRecordIds.has(String(c.id)));
       const unificada = [...pendentes, ...confirmadasSemDuplicatas].sort((a: any, b: any) => {
@@ -96,27 +102,14 @@ const Pendencias = () => {
     setSalvando(true);
     try {
       const status = getSyncStatus();
-      const origem_offline = status.hasCredentials && status.isOnline ? 0 : 1;
       const now = new Date().toISOString();
-      const novoId = await insert('pendencia_false', {
-        data: now,
-        status: 0,
+      await addToSyncQueue('pendencia', 'INSERT', '', {
         nome: nome.trim(),
         valor: parseFloat(valor),
         tipo,
         observacao: observacao.trim() || null,
-        criado_por: 'local-user',
-        atualizado_por: 'local-user',
-        origem_offline
-      });
-      await addToSyncQueue('pendencia_false', 'INSERT', novoId, {
-        id: novoId,
         data: now,
         status: 0,
-        nome: nome.trim(),
-        valor: parseFloat(valor),
-        tipo,
-        observacao: observacao.trim() || null,
         criado_por: 'local-user',
         atualizado_por: 'local-user'
       });
@@ -186,40 +179,32 @@ const Pendencias = () => {
 
     try {
       const p = pendenciaParaEditar;
-      const localId =
-        p?.__pending === true || p?.origem_offline === 1
-          ? String(p.record_id)
-          : String(p.id);
       
-      if (localId == null || String(localId).trim() === '') {
-        toast({ title: 'Não foi possível identificar a pendência.', variant: 'destructive' });
-        return;
-      }
-
-      // Verificar se é origem offline (está na sync_queue)
-      if (p?.__pending || p?.origem_offline === 1) {
-        // Atualizar payload na sync_queue
-        const syncQueueRows = await selectWhere<any>('sync_queue', 'synced = ? AND table_name = ? AND operation = ? AND record_id = ?', [0, 'pendencia_false', 'INSERT', String(localId)]);
+      // Verificar se está na sync_queue (__pending === true)
+      if (p?.__pending === true) {
+        // Localizar na sync_queue usando o ID da sync_queue (extrair de p.id que é "pending-{syncQueueId}")
+        const syncQueueId = String(p.id).replace('pending-', '');
+        const syncQueueRows = await selectWhere<any>('sync_queue', 'synced = ? AND table_name = ? AND operation = ? AND id = ?', [0, 'pendencia', 'INSERT', syncQueueId]);
         
         if (syncQueueRows.length > 0) {
           const syncItem = syncQueueRows[0];
           const updatedPayload = {
-            id: Number(localId),
-            data: p?.data || new Date().toISOString(),
-            status: 0,
             nome: editNome.trim(),
             valor: parseFloat(editValor),
             tipo: editTipo,
             observacao: editObservacao.trim() || null,
-            criado_por: 'local-user',
+            data: p?.data || new Date().toISOString(),
+            status: p?.status !== undefined ? p.status : 0,
+            criado_por: p?.criado_por || 'local-user',
             atualizado_por: 'local-user'
           };
           
           await dbUpdate('sync_queue', { payload: JSON.stringify(updatedPayload) }, 'id = ?', [syncItem.id]);
         }
       } else {
-        // Adicionar UPDATE na sync_queue para Supabase
-        await addToSyncQueue('pendencia', 'UPDATE', String(localId), {
+        // Pendência já sincronizada - adicionar UPDATE na sync_queue
+        const statusNow = getSyncStatus();
+        await addToSyncQueue('pendencia', 'UPDATE', String(p.id), {
           nome: editNome.trim(),
           valor: parseFloat(editValor),
           tipo: editTipo,
@@ -227,6 +212,10 @@ const Pendencias = () => {
           atualizado_por: 'local-user',
           data: p?.data || new Date().toISOString()
         });
+        
+        if (statusNow.hasCredentials && statusNow.isOnline) {
+          triggerSyncNow();
+        }
       }
 
       await loadItems();
@@ -247,27 +236,24 @@ const Pendencias = () => {
   async function handleConfirmarExclusao() {
     try {
       const p = pendenciaParaExcluir;
-      const localId =
-        p?.__pending === true || p?.origem_offline === 1
-          ? String(p.record_id)
-          : String(p.id);
       
-      if (localId == null || String(localId).trim() === '') {
-        toast({ title: 'Não foi possível identificar a pendência.', variant: 'destructive' });
-        return;
-      }
-
-      // Verificar se é origem offline (está na sync_queue)
-      if (p?.__pending || p?.origem_offline === 1) {
-        // Remover da sync_queue
-        const syncQueueRows = await selectWhere<any>('sync_queue', 'synced = ? AND table_name = ? AND operation = ? AND record_id = ?', [0, 'pendencia_false', 'INSERT', String(localId)]);
+      // Verificar se está na sync_queue (__pending === true)
+      if (p?.__pending === true) {
+        // Remover da sync_queue usando o ID da sync_queue (extrair de p.id que é "pending-{syncQueueId}")
+        const syncQueueId = String(p.id).replace('pending-', '');
+        const syncQueueRows = await selectWhere<any>('sync_queue', 'synced = ? AND table_name = ? AND operation = ? AND id = ?', [0, 'pendencia', 'INSERT', syncQueueId]);
         
         if (syncQueueRows.length > 0) {
           await deleteFrom('sync_queue', 'id = ?', [syncQueueRows[0].id]);
         }
       } else {
-        // Adicionar DELETE na sync_queue para Supabase
-        await addToSyncQueue('pendencia', 'DELETE', String(localId), {});
+        // Pendência já sincronizada - adicionar DELETE na sync_queue
+        const statusNow = getSyncStatus();
+        await addToSyncQueue('pendencia', 'DELETE', String(p.id), {});
+        
+        if (statusNow.hasCredentials && statusNow.isOnline) {
+          triggerSyncNow();
+        }
       }
 
       await loadItems();
