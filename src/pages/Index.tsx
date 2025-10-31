@@ -15,9 +15,10 @@ import {
   Settings,
   Printer
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 const menuItems = [
   { title: "COMPRA", path: "/compra", icon: ShoppingCart, color: "text-primary" },
@@ -37,6 +38,18 @@ const menuItems = [
 ];
 
 const Index = () => {
+  const navigate = useNavigate();
+
+  useGlobalShortcuts({
+    "1": () => navigate("/compra"),
+    "2": () => navigate("/venda"),
+    "3": () => navigate("/cadastrar-despesa"),
+    "4": () => navigate("/pendencias"),
+    "5": () => navigate("/relatorios"),
+    "/": () => navigate("/preview-comanda"),
+    "-": () => navigate(-1)
+  });
+
   return (
     <div className="min-h-screen bg-background p-4">
       {/* Header */}

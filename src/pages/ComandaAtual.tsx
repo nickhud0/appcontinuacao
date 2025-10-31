@@ -13,6 +13,7 @@ import { formatCurrency } from "@/utils/formatters";
 import { insert, addToSyncQueue } from "@/database";
 import { getSyncStatus, triggerSyncNow } from "@/services/syncEngine";
 import { getComandaPrefix, setComandaPrefix, nextComandaSequence, buildComandaCodigo } from "@/services/settings";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 interface ComandaItem {
   id: number;
@@ -74,6 +75,30 @@ const ComandaAtual = () => {
       backHandler.remove();
     };
   }, [navigate]);
+
+  // Atalhos de teclado
+  useGlobalShortcuts({
+    "+": () => {
+      // Mesma ação do botão "Adicionar": navegar para compra ou venda conforme o tipo da comanda
+      if (comanda) {
+        navigate(comanda.tipo === "compra" ? "/compra" : "/venda");
+      }
+    },
+    "enter": () => {
+      // Se algum modal estiver aberto, confirmar ação do modal
+      if (isEditDialogOpen && selectedItem) {
+        handleSaveEdit();
+      } else if (isDeleteDialogOpen && itemToDelete) {
+        handleConfirmDelete();
+      } else if (isAddDialogOpen && selectedMaterial && novaQuantidade) {
+        handleAddItem();
+      } else if (comanda && comanda.itens.length > 0) {
+        // Finalizar comanda se não houver modal aberto
+        handleFinalizarComanda();
+      }
+    },
+    "-": () => navigate(-1)
+  });
 
   const updateComanda = (novaComanda: Comanda) => {
     setComanda(novaComanda);

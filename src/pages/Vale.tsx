@@ -20,6 +20,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 const Vale = () => {
   const navigate = useNavigate();
@@ -80,6 +81,19 @@ const Vale = () => {
   useEffect(() => {
     void loadVales();
   }, []);
+
+  // Atalhos de teclado
+  useGlobalShortcuts({
+    // Enter no modal (apenas quando aberto)
+    ...(confirmOpen ? {
+      "enter": () => {
+        if (!salvando && nome.trim() && valor) {
+          handleSalvar();
+        }
+      }
+    } : {}),
+    "-": () => navigate(-1)
+  });
 
   async function handleSalvar() {
     if (!nome.trim() || !valor) {

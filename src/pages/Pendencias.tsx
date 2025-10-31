@@ -20,6 +20,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { formatCurrency } from "@/utils/formatters";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 const Pendencias = () => {
   const navigate = useNavigate();
@@ -93,6 +94,32 @@ const Pendencias = () => {
   useEffect(() => {
     void loadItems();
   }, []);
+
+  // Atalhos de teclado
+  useGlobalShortcuts({
+    // Enter nos modais (apenas quando aberto)
+    ...(confirmPagoOpen && pendenciaParaPagar ? {
+      "enter": async () => {
+        if (!alterandoId && pendenciaParaPagar) {
+          await handleMarcarComoPago(pendenciaParaPagar);
+          setConfirmPagoOpen(false);
+          setPendenciaParaPagar(null);
+        }
+      }
+    } : {}),
+    ...(confirmEditOpen ? {
+      "enter": async () => {
+        await handleSalvarEdicao();
+        setConfirmEditOpen(false);
+      }
+    } : {}),
+    ...(confirmDeleteOpen && pendenciaParaExcluir ? {
+      "enter": () => {
+        handleConfirmarExclusao();
+      }
+    } : {}),
+    "-": () => navigate(-1)
+  });
 
   async function handleSalvar() {
     if (!nome.trim() || !valor) {

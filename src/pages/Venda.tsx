@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/utils/formatters";
 import { selectAll, addToSyncQueue, insert } from "@/database";
 import { getSyncStatus } from "@/services/syncEngine";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 const Venda = () => {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
@@ -44,6 +45,28 @@ const Venda = () => {
     }
     void load();
   }, []);
+
+  // Atalhos de teclado
+  useGlobalShortcuts({
+    "-": () => navigate(-1),
+    ...Array.from({ length: 100 }, (_, i) => i).reduce((acc, num) => {
+      acc[String(num)] = () => {
+        // Se o número existir na lista, seleciona o material
+        if (materiais[num]) {
+          handleMaterialClick(materiais[num]);
+        }
+      };
+      return acc;
+    }, {} as Record<string, (e: KeyboardEvent) => void>),
+    // Enter no modal (apenas quando aberto)
+    ...(isDialogOpen ? {
+      "enter": () => {
+        if (peso) {
+          handleAdicionar();
+        }
+      }
+    } : {}),
+  });
 
   // Verificar se existe uma comanda de compra em andamento
   useEffect(() => {

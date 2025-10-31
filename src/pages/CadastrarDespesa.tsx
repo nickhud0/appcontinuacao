@@ -20,6 +20,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 const CadastrarDespesa = () => {
   const navigate = useNavigate();
@@ -130,6 +131,19 @@ const CadastrarDespesa = () => {
   // Carregar lista ao abrir
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadLista(); }, []);
+
+  // Atalhos de teclado
+  useGlobalShortcuts({
+    // Enter no modal (apenas quando aberto)
+    ...(confirmOpen ? {
+      "enter": () => {
+        if (!salvando && descricao.trim() && valor) {
+          handleSalvar();
+        }
+      }
+    } : {}),
+    "-": () => navigate(-1)
+  });
 
   return (
     <div className="min-h-screen bg-background p-4">
