@@ -167,12 +167,13 @@ export const usePrintComanda = () => {
       .text(separator)
       .newline();
 
-    // Cabeçalho da tabela com 4 colunas alinhadas
-    const headerLine = 
-      "Item".padEnd(14) +
-      "KG".padStart(5) +
-      "Preço".padStart(7) +
-      "Total".padStart(8);
+    // Cabeçalho da tabela com 4 colunas alinhadas (fonte reduzida)
+    // Fonte pequena já aplicada (.size(1, 1)) no início, mantida para toda impressão
+    const headerLine =
+      "Item".padEnd(6) +
+      "KG".padStart(6) +
+      "Preço".padStart(8) +
+      "Total".padStart(10);
     
     encoder
       .text(headerLine)
@@ -185,18 +186,18 @@ export const usePrintComanda = () => {
       encoder.text('Nenhum item').newline();
     } else {
       data.groupedItens.forEach((item) => {
-        const nomeItem = truncate(item.nome, 14); // Truncar nome para 14 caracteres
+        const nomeItem = truncate(item.nome, 6); // Truncar nome para 6 caracteres
         const kg = parseFloat(item.kg.toString()).toFixed(1); // 1 casa decimal
         const preco = parseFloat(item.precoMedio.toString()).toFixed(1); // 1 casa decimal
         const total = parseFloat(item.total.toString()).toFixed(2); // 2 casas decimais
         
-        const colItem = nomeItem.padEnd(14);
-        const colKg = kg.toString().padStart(5);
-        const colPreco = preco.toString().padStart(7);
-        const colTotal = total.toString().padStart(8);
+        const line =
+          nomeItem.padEnd(6) +
+          kg.toString().padStart(6) +
+          preco.toString().padStart(8) +
+          total.toString().padStart(10);
         
-        const linha = `${colItem}${colKg}${colPreco}${colTotal}`;
-        encoder.text(linha).newline();
+        encoder.text(line).newline();
       });
     }
 
