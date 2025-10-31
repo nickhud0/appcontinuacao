@@ -1,4 +1,4 @@
-import { ArrowLeft, AlertCircle, CloudOff, Edit, Trash2 } from "lucide-react";
+import { ArrowLeft, AlertCircle, CloudOff, Edit, Trash2, CheckCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -329,27 +329,14 @@ const Pendencias = () => {
               console.log("PENDENCIA ITEM", p);
               return (
               <Card key={p.id} className="p-3 sm:p-4 rounded-xl border border-border/20 shadow-sm hover:bg-accent/5 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <div className="text-lg sm:text-xl font-semibold text-foreground truncate">{p.nome}</div>
-                    {p.observacao && (
-                      <div className="text-sm text-blue-700 whitespace-pre-wrap break-words mt-1">
-                        {p.observacao}
-                      </div>
-                    )}
-                    <div className="text-sm sm:text-base text-muted-foreground mt-0.5">
-                      {formatCurrency(Number(p.valor) || 0)} • {(p.tipo === 'a_pagar' ? 'A pagar' : 'A receber')} • {new Date(p.data).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {(p.__pending || p.origem_offline === 1) && (
-                      <CloudOff className="h-4 w-4 text-yellow-500" />
-                    )}
+                {/* Linha superior: Edit/Delete à esquerda, CloudOff à direita */}
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => handleAbrirEdicao(p)}
-                      className="h-8 w-8 p-0 text-gray-500 hover:text-blue-600"
+                      className="h-8 w-8 p-0 text-blue-500 hover:text-blue-600"
                     >
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -357,19 +344,40 @@ const Pendencias = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleAbrirExclusao(p)}
-                      className="h-8 w-8 p-0 text-gray-500 hover:text-red-600"
+                      className="h-8 w-8 p-0 text-red-500 hover:text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => { setPendenciaParaPagar(p); setConfirmPagoOpen(true); }}
-                      disabled={alterandoId === (p?.__pending ? p?.record_id : p?.id)}
-                    >
-                      Marcar como pago
-                    </Button>
                   </div>
+                  {(p.__pending || p.origem_offline === 1) && (
+                    <CloudOff className="h-4 w-4 text-yellow-500" />
+                  )}
+                </div>
+                
+                {/* Conteúdo principal */}
+                <div className="min-w-0 mb-2">
+                  <div className="text-lg sm:text-xl font-semibold text-foreground truncate">{p.nome}</div>
+                  {p.observacao && (
+                    <div className="text-sm text-blue-700 whitespace-pre-wrap break-words mt-1">
+                      {p.observacao}
+                    </div>
+                  )}
+                  <div className="text-sm sm:text-base text-muted-foreground mt-0.5">
+                    {formatCurrency(Number(p.valor) || 0)} • {(p.tipo === 'a_pagar' ? 'A pagar' : 'A receber')} • {new Date(p.data).toLocaleString()}
+                  </div>
+                </div>
+                
+                {/* Botão marcar como pago (ícone) no canto inferior direito */}
+                <div className="flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => { setPendenciaParaPagar(p); setConfirmPagoOpen(true); }}
+                    disabled={alterandoId === (p?.__pending ? p?.record_id : p?.id)}
+                    className="h-8 w-8 p-0 text-gray-500 hover:text-green-600"
+                  >
+                    <CheckCircle className="h-[18px] w-[18px]" />
+                  </Button>
                 </div>
               </Card>
               );
