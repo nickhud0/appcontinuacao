@@ -1,6 +1,6 @@
 import { ArrowLeft, Plus, Package, CloudOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,11 @@ const Compra = () => {
 
   const [materiais, setMateriais] = useState<any[]>([]);
   const [loadingMateriais, setLoadingMateriais] = useState(true);
+
+  // Refs para navegação de foco entre inputs do popup
+  const pesoRef = useRef<HTMLInputElement>(null);
+  const precoRef = useRef<HTMLInputElement>(null);
+  const descontoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function load() {
@@ -270,6 +275,7 @@ const Compra = () => {
               <div>
                 <Label htmlFor="peso">Peso (kg)</Label>
                 <Input 
+                  ref={pesoRef}
                   id="peso"
                   type="number"
                   inputMode="decimal"
@@ -279,7 +285,14 @@ const Compra = () => {
                   value={peso}
                   onChange={(e) => setPeso(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      precoRef.current?.focus();
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      // Já está no primeiro campo, não faz nada ou foca nele mesmo
+                      pesoRef.current?.focus();
+                    } else if (e.key === 'Enter') {
                       handleAdicionar();
                     }
                   }}
@@ -290,6 +303,7 @@ const Compra = () => {
               <div>
                 <Label htmlFor="preco">Preço por kg</Label>
                 <Input 
+                  ref={precoRef}
                   id="preco"
                   type="number"
                   inputMode="decimal"
@@ -298,7 +312,13 @@ const Compra = () => {
                   value={precoPersonalizado}
                   onChange={(e) => setPrecoPersonalizado(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      descontoRef.current?.focus();
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      pesoRef.current?.focus();
+                    } else if (e.key === 'Enter') {
                       handleAdicionar();
                     }
                   }}
@@ -309,6 +329,7 @@ const Compra = () => {
               <div>
                 <Label htmlFor="desconto">Desconto (kg)</Label>
                 <Input 
+                  ref={descontoRef}
                   id="desconto"
                   type="number"
                   inputMode="decimal"
@@ -317,7 +338,14 @@ const Compra = () => {
                   value={desconto}
                   onChange={(e) => setDesconto(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      // Já está no último campo, não faz nada ou foca nele mesmo
+                      descontoRef.current?.focus();
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      precoRef.current?.focus();
+                    } else if (e.key === 'Enter') {
                       handleAdicionar();
                     }
                   }}
