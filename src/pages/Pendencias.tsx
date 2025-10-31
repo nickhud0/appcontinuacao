@@ -218,7 +218,14 @@ const Pendencias = () => {
         }
       }
 
-      await loadItems();
+      setItems((current) =>
+        current.map((item) =>
+          item.id === p.id
+            ? { ...item, nome: editNome.trim(), valor: parseFloat(editValor), tipo: editTipo, observacao: editObservacao.trim() || null }
+            : item
+        )
+      );
+
       setIsEditDialogOpen(false);
       setPendenciaParaEditar(null);
     } catch (error) {
@@ -256,7 +263,8 @@ const Pendencias = () => {
         }
       }
 
-      await loadItems();
+      setItems((current) => current.filter((item) => item.id !== p.id));
+
       setConfirmDeleteOpen(false);
       setPendenciaParaExcluir(null);
     } catch (error) {
