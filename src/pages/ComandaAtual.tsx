@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { AlertDialog, AlertDialogTrigger, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/utils/formatters";
 import { insert, addToSyncQueue } from "@/database";
@@ -45,6 +46,11 @@ const ComandaAtual = () => {
   const [selectedMaterial, setSelectedMaterial] = useState<any>(null);
   const [novaQuantidade, setNovaQuantidade] = useState("");
   const [novoPreco, setNovoPreco] = useState("");
+  
+  // Estados para popups de confirmação
+  const [confirmFinalizarOpen, setConfirmFinalizarOpen] = useState(false);
+  const [confirmCancelarOpen, setConfirmCancelarOpen] = useState(false);
+  const [inputConfirmCancelar, setInputConfirmCancelar] = useState("");
 
   // Helper para formatar números com 2 casas decimais
   const formatNumber = (value: number): string => {
@@ -337,7 +343,7 @@ const ComandaAtual = () => {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={handleLimparComanda}
+            onClick={() => setConfirmCancelarOpen(true)}
             className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 border-red-300 hover:border-red-400"
           >
             Cancelar
@@ -425,7 +431,7 @@ const ComandaAtual = () => {
       {/* Botão Finalizar - Fixo na parte inferior */}
       <div className="fixed bottom-0 left-0 right-0 bg-background border-t-2 border-primary/20 p-4 z-20">
         <Button 
-          onClick={handleFinalizarComanda} 
+          onClick={() => setConfirmFinalizarOpen(true)} 
           className="w-full h-14 bg-green-600 hover:bg-green-700 text-white font-bold text-base"
           size="lg"
         >
@@ -627,6 +633,64 @@ const ComandaAtual = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* AlertDialog para confirmar finalização da comanda */}
+      <AlertDialog open={confirmFinalizarOpen} onOpenChange={setConfirmFinalizarOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Finalizar Comanda?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Ao finalizar, todos os itens serão registrados e a comanda será encerrada. Deseja continuar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmFinalizarOpen(false);
+                handleFinalizarComanda();
+              }}
+            >
+              Confirmar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* AlertDialog para confirmar cancelamento da comanda */}
+      <AlertDialog open={confirmCancelarOpen} onOpenChange={setConfirmCancelarOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar Comanda?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Para confirmar o cancelamento, digite <strong>Cancelar</strong> abaixo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <input
+            type="text"
+            placeholder="Digite Cancelar para confirmar"
+            className="border rounded p-2 w-full mt-3"
+            value={inputConfirmCancelar}
+            onChange={(e) => setInputConfirmCancelar(e.target.value)}
+            autoFocus
+          />
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={inputConfirmCancelar.trim() !== "Cancelar"}
+              onClick={() => {
+                setConfirmCancelarOpen(false);
+                setInputConfirmCancelar("");
+                handleLimparComanda();
+              }}
+            >
+              Confirmar Cancelamento
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
