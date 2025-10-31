@@ -221,7 +221,7 @@ const Pendencias = () => {
       setItems((current) =>
         current.map((item) =>
           item.id === p.id
-            ? { ...item, nome: editNome.trim(), valor: parseFloat(editValor), tipo: editTipo, observacao: editObservacao.trim() || null }
+            ? { ...item, nome: editNome.trim(), valor: parseFloat(editValor), tipo: editTipo, observacao: editObservacao.trim() || null, __pending: true }
             : item
         )
       );
