@@ -229,24 +229,28 @@ const Compra = () => {
               const currentColor = colors[colorIndex];
               
               return (
-                <Card
-                  key={material.id}
-                  className={`relative p-3 flex flex-col items-center text-center cursor-pointer hover:scale-105 transition-all duration-200 ${currentColor.bg} ${currentColor.border} border-2`}
-                  onClick={() => handleMaterialClick(material)}
-                >
-                  {material.origem_offline === 1 && (
-                    <CloudOff className="absolute left-2 top-2 h-4 w-4 text-orange-700" />
-                  )}
-                  <Package className={`h-6 w-6 ${currentColor.text} mb-2`} />
-                  <h3 className="w-full font-semibold text-foreground text-base leading-tight mb-1 break-words text-center sm:text-lg sm:leading-tight">
-                    {material.nome}
-                  </h3>
-                  <div className="flex items-center gap-2">
-                    <p className={`text-base ${currentColor.text} font-medium`}>
-                      {formatCurrency(material.preco_compra)}/kg
-                    </p>
+                <div key={material.id} className="relative">
+                  <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full w-8 h-8 flex items-center justify-center text-[14px] font-semibold select-none z-10">
+                    {index}
                   </div>
-                </Card>
+                  <Card
+                    className={`relative p-3 flex flex-col items-center text-center cursor-pointer hover:scale-105 transition-all duration-200 ${currentColor.bg} ${currentColor.border} border-2`}
+                    onClick={() => handleMaterialClick(material)}
+                  >
+                    {material.origem_offline === 1 && (
+                      <CloudOff className="absolute left-2 top-2 h-4 w-4 text-orange-700" />
+                    )}
+                    <Package className={`h-6 w-6 ${currentColor.text} mb-2`} />
+                    <h3 className="w-full font-semibold text-foreground text-base leading-tight mb-1 break-words text-center sm:text-lg sm:leading-tight">
+                      {material.nome}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-base ${currentColor.text} font-medium`}>
+                        {formatCurrency(material.preco_compra)}/kg
+                      </p>
+                    </div>
+                  </Card>
+                </div>
               );
             })}
           </div>
