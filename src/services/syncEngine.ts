@@ -149,6 +149,8 @@ async function pushPending(): Promise<void> {
           if (payload.preco_venda != null) remote.preco_venda = Number(payload.preco_venda);
           if (payload.criado_por != null) remote.criado_por = payload.criado_por;
           if (payload.atualizado_por != null) remote.atualizado_por = payload.atualizado_por;
+          // ✅ Incluir display_order para garantir sincronização da ordem
+          if (payload.display_order != null) remote.display_order = Number(payload.display_order);
 
           ({ data, error } = await client
             .from('material')

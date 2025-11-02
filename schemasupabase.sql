@@ -34,7 +34,8 @@ CREATE TABLE IF NOT EXISTS material (
   preco_compra    NUMERIC(14,4) NOT NULL DEFAULT 0,
   preco_venda     NUMERIC(14,4) NOT NULL DEFAULT 0,
   criado_por      TEXT        NOT NULL,
-  atualizado_por  TEXT        NOT NULL
+  atualizado_por  TEXT        NOT NULL,
+  display_order   INTEGER     NOT NULL DEFAULT 9999
 );
 
 CREATE TABLE IF NOT EXISTS comanda (

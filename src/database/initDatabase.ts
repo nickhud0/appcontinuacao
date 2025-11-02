@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS material (
   preco_venda REAL NOT NULL DEFAULT 0,
   criado_por TEXT NOT NULL,
   atualizado_por TEXT NOT NULL,
+  display_order INTEGER DEFAULT 9999,
   data_sync TEXT,                   -- última data de sincronização
   origem_offline INTEGER DEFAULT 0  -- 1 = criado offline, 0 = já sincronizado
 );
@@ -496,6 +497,19 @@ export async function initializeDatabase(): Promise<SQLiteDBConnection> {
         logger.info('ℹ️ Column criado_por already exists or table not found (ignored)');
       } else {
         logger.warn('⚠️ Could not add criado_por column to comanda_20:', error);
+      }
+    }
+
+    // Ensure material has display_order column (migration for existing databases)
+    try {
+      await db.run('ALTER TABLE material ADD COLUMN display_order INTEGER DEFAULT 9999');
+      logger.info('✅ Added display_order column to material table');
+    } catch (error: any) {
+      // Column already exists - ignore error
+      if (error?.message?.includes('duplicate column') || error?.message?.includes('no such table')) {
+        logger.info('ℹ️ Column display_order already exists or table not found (ignored)');
+      } else {
+        logger.warn('⚠️ Could not add display_order column to material:', error);
       }
     }
 

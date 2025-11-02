@@ -42,7 +42,7 @@ const Venda = () => {
     async function load() {
       try {
         setLoadingMateriais(true);
-        const rows = await selectAll<any>('material', 'nome ASC');
+        const rows = await selectAll<any>('material', 'display_order ASC, nome ASC');
         setMateriais(rows);
       } finally {
         setLoadingMateriais(false);

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS material (
   preco_venda REAL NOT NULL DEFAULT 0,
   criado_por TEXT NOT NULL,
   atualizado_por TEXT NOT NULL,
+  display_order INTEGER DEFAULT 9999,
   data_sync TEXT,                   -- última data de sincronização
   origem_offline INTEGER DEFAULT 0  -- 1 = criado offline, 0 = já sincronizado
 );

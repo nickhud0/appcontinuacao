@@ -33,6 +33,7 @@ export interface Material extends SyncableRecord, AuditableRecord {
   categoria: string;
   preco_compra: number;
   preco_venda: number;
+  display_order?: number; // Order for display (default: 9999)
 }
 
 /**
