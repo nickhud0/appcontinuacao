@@ -486,6 +486,19 @@ export async function initializeDatabase(): Promise<SQLiteDBConnection> {
     // Verify all tables exist
     await verifyTables(db);
 
+    // Ensure comanda_20 has criado_por column (migration for existing databases)
+    try {
+      await db.run('ALTER TABLE comanda_20 ADD COLUMN criado_por TEXT');
+      logger.info('✅ Added criado_por column to comanda_20 table');
+    } catch (error: any) {
+      // Column already exists or table doesn't exist yet - ignore error
+      if (error?.message?.includes('duplicate column') || error?.message?.includes('no such table')) {
+        logger.info('ℹ️ Column criado_por already exists or table not found (ignored)');
+      } else {
+        logger.warn('⚠️ Could not add criado_por column to comanda_20:', error);
+      }
+    }
+
     // Mark as initialized
     isInitialized = true;
 

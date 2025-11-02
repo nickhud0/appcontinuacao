@@ -9,10 +9,15 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useEffect, useState } from "react";
 import { selectAll } from "@/database";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 const Relatorios = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useGlobalShortcuts({
+    "-": () => navigate(-1),
+  });
   const [diario, setDiario] = useState<any[]>([]);
   const [mensal, setMensal] = useState<any[]>([]);
   const [anual, setAnual] = useState<any[]>([]);

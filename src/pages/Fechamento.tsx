@@ -10,10 +10,15 @@ import { getSyncStatus, triggerSyncNow } from "@/services/syncEngine";
 import { getSupabaseClient } from "@/services/supabaseClient";
 import { Device } from '@capacitor/device';
 import { formatCurrency } from "@/utils/formatters";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 const Fechamento = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  useGlobalShortcuts({
+    "-": () => navigate(-1),
+  });
   const [data, setData] = useState<{ desde_data: string | null; ate_data: string | null; compra: number | null; despesa: number | null; venda: number | null; lucro: number | null } | null>(null);
   const [observacao, setObservacao] = useState("");
   const [loading, setLoading] = useState(true);

@@ -8,9 +8,15 @@ import { selectAll, executeQuery } from "@/database";
 import { formatCurrency, formatWeight, formatDateTime } from "@/utils/formatters";
 import { onSyncStatus, type SyncStatus } from "@/services/syncEngine";
 import type { Estoque as EstoqueRow } from "@/database";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 const Estoque = () => {
   const navigate = useNavigate();
+
+  useGlobalShortcuts({
+    "-": () => navigate(-1),
+  });
+
   const [estoque, setEstoque] = useState<EstoqueRow[]>([]);
   const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);

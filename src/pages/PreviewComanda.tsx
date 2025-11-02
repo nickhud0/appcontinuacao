@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { generateAndSaveComandaA4Pdf } from "@/services/pdf/generateComandaA4";
 import { usePrintComanda } from "@/hooks/usePrintComanda";
+import { useGlobalShortcuts } from "@/shortcuts";
 
 type ComandaHeader = {
   comanda_id: number | null;
@@ -427,6 +428,35 @@ const PreviewComanda = () => {
     return () => window.cancelAnimationFrame(id);
   }, [computeScale, loading, itens.length]);
 
+  // Função para imprimir comanda
+  const handleImprimir = async () => {
+    if (isPrinting) return;
+    
+    try {
+      await printComanda({
+        header: {
+          codigo: header?.codigo ?? null,
+          comanda_data: header?.comanda_data ?? null,
+          comanda_tipo: header?.comanda_tipo ?? null,
+          observacoes: header?.observacoes ?? null,
+        },
+        groupedItens,
+        total: Number(totalCalculado) || 0,
+      });
+    } catch (error) {
+      // Erro já tratado no hook
+      console.error('Erro na impressão:', error);
+    }
+  };
+
+  // Atalhos de teclado
+  useGlobalShortcuts({
+    "enter": () => {
+      handleImprimir();
+    },
+    "-": () => navigate(-1),
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background p-4">
@@ -596,23 +626,7 @@ const PreviewComanda = () => {
           </button>
           <button 
             className="flex-1 py-3 rounded-lg bg-gray-700 text-white font-semibold text-base shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={async () => {
-              try {
-                await printComanda({
-                  header: {
-                    codigo: header?.codigo ?? null,
-                    comanda_data: header?.comanda_data ?? null,
-                    comanda_tipo: header?.comanda_tipo ?? null,
-                    observacoes: header?.observacoes ?? null,
-                  },
-                  groupedItens,
-                  total: Number(totalCalculado) || 0,
-                });
-              } catch (error) {
-                // Erro já tratado no hook
-                console.error('Erro na impressão:', error);
-              }
-            }}
+            onClick={handleImprimir}
             disabled={isPrinting}
           >
             {isPrinting ? "Imprimindo..." : "Imprimir"}

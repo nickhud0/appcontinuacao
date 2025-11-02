@@ -91,6 +91,23 @@ const ComandaAtual = () => {
       }
     },
     "enter": () => {
+      // Se popup de FINALIZAR está aberto → CONFIRMAR
+      if (confirmFinalizarOpen) {
+        setConfirmFinalizarOpen(false);
+        handleFinalizarComanda();
+        return;
+      }
+
+      // Se popup de CANCELAR está aberto → CONFIRMAR SOMENTE se digitou "Cancelar"
+      if (confirmCancelarOpen) {
+        if (inputConfirmCancelar.trim() === "Cancelar") {
+          setConfirmCancelarOpen(false);
+          setInputConfirmCancelar("");
+          handleLimparComanda();
+        }
+        return;
+      }
+
       // Se algum modal estiver aberto, confirmar ação do modal
       if (isEditDialogOpen && selectedItem) {
         handleSaveEdit();
@@ -99,8 +116,8 @@ const ComandaAtual = () => {
       } else if (isAddDialogOpen && selectedMaterial && novaQuantidade) {
         handleAddItem();
       } else if (comanda && comanda.itens.length > 0) {
-        // Finalizar comanda se não houver modal aberto
-        handleFinalizarComanda();
+        // Caso nenhum popup esteja aberto → ABRIR popup de finalizar
+        setConfirmFinalizarOpen(true);
       }
     },
     "-": () => navigate(-1)

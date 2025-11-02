@@ -146,6 +146,7 @@ const HistoricoComandas = () => {
               comanda_data: payload.data ?? payload.comanda_data ?? row.created_at ?? null,
               comanda_tipo: payload.tipo ?? payload.comanda_tipo ?? null,
               observacoes: payload.observacoes ?? null,
+              criado_por: payload.criado_por ?? null,
               origem_offline: 1,
               __is_pending: true,
               items: [] as any[]
@@ -163,6 +164,7 @@ const HistoricoComandas = () => {
               comanda_data: null,
               comanda_tipo: null,
               observacoes: null,
+              criado_por: null,
               origem_offline: 1,
               __is_pending: true,
               items: [] as any[]
@@ -190,6 +192,7 @@ const HistoricoComandas = () => {
               comanda_data: r.comanda_data ?? null,
               comanda_tipo: r.comanda_tipo ?? null,
               observacoes: r.observacoes ?? null,
+              criado_por: r.criado_por ?? null,
               origem_offline: r.origem_offline ?? 0,
               __is_pending: false,
               items: [] as any[]
@@ -281,6 +284,7 @@ const HistoricoComandas = () => {
                 comanda_data: r.comanda_data ?? null,
                 comanda_tipo: r.comanda_tipo ?? null,
                 observacoes: r.observacoes ?? null,
+                criado_por: r.criado_por ?? null,
                 origem_offline: r.origem_offline ?? 0,
                 __is_pending: false,
                 items: [] as any[]
