@@ -465,62 +465,86 @@ const ComandaAtual = () => {
           </DialogHeader>
           
           {selectedItem && (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="material">Material</Label>
-                <Input 
-                  id="material"
-                  value={selectedItem.material}
-                  disabled
-                  className="bg-muted"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="quantidade">Quantidade (kg)</Label>
-                <Input 
-                  id="quantidade"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editQuantidade}
-                  onChange={(e) => setEditQuantidade(e.target.value)}
-                  placeholder="Digite a quantidade"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="preco">Preço por kg</Label>
-                <Input 
-                  id="preco"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editPreco}
-                  onChange={(e) => setEditPreco(e.target.value)}
-                  placeholder="Digite o preço"
-                />
-              </div>
-              
-              {/* Subtotal Section */}
-              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4 mt-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-lg text-green-700 dark:text-green-300 font-semibold">Subtotal</p>
-                  <p className="text-3xl font-black text-green-800 dark:text-green-200">
-                    {formatCurrency(calcularSubtotalEdit())}
-                  </p>
+            <form 
+              id="edit-item-form" 
+              onSubmit={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleSaveEdit();
+              }}
+            >
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="material">Material</Label>
+                  <Input 
+                    id="material"
+                    value={selectedItem.material}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="quantidade">Quantidade (kg)</Label>
+                  <Input 
+                    id="quantidade"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editQuantidade}
+                    onChange={(e) => setEditQuantidade(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.stopPropagation();
+                      }
+                    }}
+                    placeholder="Digite a quantidade"
+                  />
+                </div>
+                
+                <div>
+                  <Label htmlFor="preco">Preço por kg</Label>
+                  <Input 
+                    id="preco"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={editPreco}
+                    onChange={(e) => setEditPreco(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.stopPropagation();
+                      }
+                    }}
+                    placeholder="Digite o preço"
+                  />
+                </div>
+                
+                {/* Subtotal Section */}
+                <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-4 mt-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-lg text-green-700 dark:text-green-300 font-semibold">Subtotal</p>
+                    <p className="text-3xl font-black text-green-800 dark:text-green-200">
+                      {formatCurrency(calcularSubtotalEdit())}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  <Button type="submit" className="w-full">
+                    Salvar
+                  </Button>
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsEditDialogOpen(false)} 
+                    className="w-full"
+                  >
+                    Cancelar
+                  </Button>
                 </div>
               </div>
-              
-              <div className="flex flex-col gap-2">
-                <Button onClick={handleSaveEdit} className="w-full">
-                  Salvar
-                </Button>
-                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full">
-                  Cancelar
-                </Button>
-              </div>
-            </div>
+            </form>
           )}
         </DialogContent>
       </Dialog>
