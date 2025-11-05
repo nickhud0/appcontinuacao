@@ -51,6 +51,10 @@ const PreviewComanda = () => {
   const receiptRef = useRef<HTMLDivElement | null>(null);
   const headerRef = useRef<HTMLDivElement | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
+  
+  // Refs estáveis para evitar re-subscriptions
+  const printFnRef = useRef<null | (() => Promise<void>)>(null);
+  const lastPrintAtRef = useRef<number>(0);
 
   // Função para formatar apenas o horário
   const formatTime = (date: Date | string): string => {
@@ -429,7 +433,7 @@ const PreviewComanda = () => {
   }, [computeScale, loading, itens.length]);
 
   // Função para imprimir comanda
-  const handleImprimir = async () => {
+  const handleImprimir = useCallback(async () => {
     if (isPrinting) return;
     
     try {
@@ -447,13 +451,72 @@ const PreviewComanda = () => {
       // Erro já tratado no hook
       console.error('Erro na impressão:', error);
     }
-  };
+  }, [printComanda, header, groupedItens, totalCalculado, isPrinting]);
+
+  // Sempre manter a referência atualizada para os listeners usarem
+  useEffect(() => {
+    printFnRef.current = handleImprimir;
+  }, [handleImprimir]);
+
+  // Atalho Enter para imprimir (keyup + debounce de 1500ms)
+  useEffect(() => {
+    // Função utilitária: está digitando?
+    function isTyping(): boolean {
+      const active = document.activeElement;
+      return !!(
+        active &&
+        (
+          active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          active.tagName === "SELECT" ||
+          active.getAttribute("contenteditable") === "true"
+        )
+      );
+    }
+
+    // Bloqueia repetição enquanto tecla está pressionada
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Enter" && !isTyping()) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    }
+
+    // Imprime somente quando SOLTAR a tecla (keyup) + debounce
+    async function handleKeyUp(e: KeyboardEvent) {
+      if (e.key !== "Enter" || isTyping()) return;
+
+      // Debounce de 1500ms
+      const now = Date.now();
+      if (now - lastPrintAtRef.current < 1500) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      lastPrintAtRef.current = now;
+
+      const fn = printFnRef.current;
+      if (typeof fn === "function") {
+        await fn();
+      }
+    }
+
+    // Registro em fase de captura, para interceptar antes de outros handlers
+    window.addEventListener("keydown", handleKeyDown, { capture: true });
+    window.addEventListener("keyup", handleKeyUp, { capture: true });
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown, { capture: true } as any);
+      window.removeEventListener("keyup", handleKeyUp, { capture: true } as any);
+    };
+  }, []); // <- deps vazias: registra apenas uma vez
 
   // Atalhos de teclado
   useGlobalShortcuts({
-    "enter": () => {
-      handleImprimir();
-    },
     "-": () => navigate(-1),
   });
 
@@ -625,6 +688,7 @@ const PreviewComanda = () => {
             PDF
           </button>
           <button 
+            type="button"
             className="flex-1 py-3 rounded-lg bg-gray-700 text-white font-semibold text-base shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleImprimir}
             disabled={isPrinting}
