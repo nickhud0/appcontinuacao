@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/utils/formatters";
-import { selectAll, update as dbUpdate, deleteFrom, exists, addToSyncQueue } from "@/database";
+import { selectAll, selectById, selectWhere, update as dbUpdate, deleteFrom, exists, addToSyncQueue } from "@/database";
 import { getSyncStatus } from "@/services/syncEngine";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -90,12 +90,31 @@ const TabelaPrecos = () => {
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [materiaisReordenados, setMateriaisReordenados] = useState<any[]>([]);
   const [savingOrder, setSavingOrder] = useState(false);
+  const [pendingIds, setPendingIds] = useState<Set<number | string>>(new Set());
 
   async function loadMateriais() {
     try {
       setLoading(true);
       const rows = await selectAll<any>('material', 'display_order ASC, nome ASC');
       setMateriais(rows);
+      
+      // Buscar materiais pendentes na sync_queue
+      const syncQueue = await selectWhere<any>(
+        'sync_queue',
+        'table_name = ? AND synced = ?',
+        ['material', 0]
+      );
+      
+      // Extrair IDs dos materiais pendentes (normalizar para número ou string)
+      const pendingMaterialIds = new Set<number | string>();
+      syncQueue.forEach((item: any) => {
+        if (item.record_id != null) {
+          // Normalizar para número se possível, senão manter como string
+          const id = Number(item.record_id);
+          pendingMaterialIds.add(isNaN(id) ? item.record_id : id);
+        }
+      });
+      setPendingIds(pendingMaterialIds);
     } finally {
       setLoading(false);
     }
@@ -164,6 +183,26 @@ const TabelaPrecos = () => {
         origem_offline,
         data_sync: origem_offline ? null : now
       }, 'id = ?', [selectedMaterial.id]);
+
+      // Sempre adicionar à sync_queue para garantir sincronização (online ou offline)
+      const materialAtualizado = await selectById<any>('material', selectedMaterial.id);
+      if (materialAtualizado) {
+        const materialParaSync = {
+          ...materialAtualizado,
+          preco_compra: novoPrecoCompraNum,
+          preco_venda: novoPrecoVendaNum,
+          display_order: materialAtualizado.display_order ?? 9999,
+          atualizado_por: 'local-user',
+          origem_offline: 1, // Sempre marcar como offline para garantir reenvio
+          data_sync: null    // Garantir reenvio
+        };
+        await addToSyncQueue(
+          'material',
+          'UPDATE',
+          materialAtualizado.id,
+          materialParaSync
+        );
+      }
 
       await loadMateriais();
 
@@ -487,17 +526,20 @@ const TabelaPrecos = () => {
             <div className="grid grid-cols-1 gap-3 sm:gap-4">
               {materiaisReordenados.map((material) => (
                 <SortableMaterialCard key={material.id} material={material}>
-                  <Card className="bg-background shadow-sm rounded-xl p-3 sm:p-4 border border-border/20 hover:bg-accent/5 transition-colors flex flex-col gap-1.5 sm:gap-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <h3 className="text-lg sm:text-xl font-semibold text-foreground truncate" title={material.nome}>
-                          {material.nome}
-                        </h3>
-                        {material.origem_offline === 1 && (
-                          <CloudOff className="h-4 w-4 text-yellow-500 shrink-0" title="Aguardando sincronização" />
-                        )}
+                  <div className="relative">
+                    {pendingIds.has(material.id) && (
+                      <div className="absolute top-1.5 right-1.5 bg-yellow-500 rounded-full w-5 h-5 flex items-center justify-center shadow-md z-10">
+                        <CloudOff size={12} className="text-black" />
                       </div>
-                    </div>
+                    )}
+                    <Card className="bg-background shadow-sm rounded-xl p-3 sm:p-4 border border-border/20 hover:bg-accent/5 transition-colors flex flex-col gap-1.5 sm:gap-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h3 className="text-lg sm:text-xl font-semibold text-foreground truncate" title={material.nome}>
+                            {material.nome}
+                          </h3>
+                        </div>
+                      </div>
                     <p className="text-sm sm:text-base text-muted-foreground">{material.categoria}</p>
                     <div className="flex items-center justify-between mt-1">
                       <div className="flex flex-col leading-tight space-y-0.5">
@@ -510,25 +552,29 @@ const TabelaPrecos = () => {
                       </div>
                     </div>
                   </Card>
+                  </div>
                 </SortableMaterialCard>
               ))}
             </div>
           </SortableContext>
         </DndContext>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:gap-4">
-          {materiaisFiltrados.map((material) => (
-            <Card key={material.id} className="bg-background shadow-sm rounded-xl p-3 sm:p-4 border border-border/20 hover:bg-accent/5 transition-colors flex flex-col gap-1.5 sm:gap-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 min-w-0">
-                  <h3 className="text-lg sm:text-xl font-semibold text-foreground truncate" title={material.nome}>
-                    {material.nome}
-                  </h3>
-                  {material.origem_offline === 1 && (
-                    <CloudOff className="h-4 w-4 text-yellow-500 shrink-0" title="Aguardando sincronização" />
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
+              {materiaisFiltrados.map((material) => (
+                <div key={material.id} className="relative">
+                  {pendingIds.has(material.id) && (
+                    <div className="absolute top-1.5 right-1.5 bg-yellow-500 rounded-full w-5 h-5 flex items-center justify-center shadow-md z-10">
+                      <CloudOff size={12} className="text-black" />
+                    </div>
                   )}
-                </div>
-              </div>
+                  <Card className="bg-background shadow-sm rounded-xl p-3 sm:p-4 border border-border/20 hover:bg-accent/5 transition-colors flex flex-col gap-1.5 sm:gap-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h3 className="text-lg sm:text-xl font-semibold text-foreground truncate" title={material.nome}>
+                          {material.nome}
+                        </h3>
+                      </div>
+                    </div>
               <p className="text-sm sm:text-base text-muted-foreground">{material.categoria}</p>
               <div className="flex items-center justify-between mt-1">
                 <div className="flex flex-col leading-tight space-y-0.5">
@@ -575,6 +621,7 @@ const TabelaPrecos = () => {
                 </div>
               </div>
             </Card>
+                </div>
           ))}
         </div>
       )}
