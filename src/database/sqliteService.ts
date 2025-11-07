@@ -13,11 +13,7 @@ import { logger } from '@/utils/logger';
  * Ensure database is initialized before operations
  */
 async function ensureInitialized(): Promise<SQLiteDBConnection> {
-  if (!isDatabaseInitialized()) {
-    logger.warn('Database not initialized, initializing now...');
-    return await initializeDatabase();
-  }
-  return getDatabase();
+  return await initializeDatabase();
 }
 
 /**

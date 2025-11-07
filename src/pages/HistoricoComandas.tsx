@@ -1,4 +1,4 @@
-import { ArrowLeft, History, CloudOff, Receipt, ShoppingCart, Coins, Calendar, Package, Scale, DollarSign, Smartphone, Clock, Hash, X, Eye } from "lucide-react";
+import { ArrowLeft, History, CloudOff, Receipt, ShoppingCart, Coins, Calendar, Package, Scale, DollarSign, Smartphone, Clock, Hash, X, Eye, SlidersHorizontal } from "lucide-react";
 import { Device } from '@capacitor/device';
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { getSupabaseClient } from "@/services/supabaseClient";
 import { getSyncStatus } from "@/services/syncEngine";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 
 const DEBUG_HISTORICO = false;
 function dbg(...args: any[]) {
@@ -55,6 +57,18 @@ const HistoricoComandas = () => {
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [searching, setSearching] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  
+  // Estados para filtros avançados
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filterTipo, setFilterTipo] = useState<string | null>(null);
+  const [filterDataInicio, setFilterDataInicio] = useState<string | null>(null);
+  const [filterDataFim, setFilterDataFim] = useState<string | null>(null);
+  const [filterValorMin, setFilterValorMin] = useState<string | null>(null);
+  const [filterValorMax, setFilterValorMax] = useState<string | null>(null);
+  const [filterQtdItensMin, setFilterQtdItensMin] = useState<string | null>(null);
+  const [filterQtdItensMax, setFilterQtdItensMax] = useState<string | null>(null);
+  const [filterOrder, setFilterOrder] = useState<'asc' | 'desc'>('desc');
+  const [filteredResults, setFilteredResults] = useState<any[] | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -384,6 +398,263 @@ const HistoricoComandas = () => {
     }
   }
 
+  async function applyFilters() {
+    // Verificar se está online e tem credenciais
+    const status = getSyncStatus();
+    if (!status.isOnline || !status.hasCredentials) {
+      toast({
+        title: 'Filtros avançados precisam de conexão com a nuvem',
+        description: 'Conecte-se à internet para usar esta função.',
+        variant: 'destructive' as any,
+      });
+      return;
+    }
+
+    const client = getSupabaseClient();
+    if (!client) {
+      toast({
+        title: 'Erro ao aplicar filtros',
+        description: 'Não foi possível conectar ao servidor.',
+        variant: 'destructive' as any,
+      });
+      return;
+    }
+
+    try {
+      // Normalização de inputs
+      const tipoValue = filterTipo === 'all' ? null : filterTipo;
+      let dataInicioISO: string | null = null;
+      let dataFimISO: string | null = null;
+      
+      if (filterDataInicio) {
+        try {
+          const d = new Date(filterDataInicio);
+          if (!Number.isNaN(d.getTime())) {
+            dataInicioISO = d.toISOString();
+          }
+        } catch {}
+      }
+      
+      if (filterDataFim) {
+        try {
+          const d = new Date(filterDataFim);
+          if (!Number.isNaN(d.getTime())) {
+            dataFimISO = d.toISOString();
+          }
+        } catch {}
+      }
+
+      const valorMin = filterValorMin ? Number(filterValorMin) : null;
+      const valorMax = filterValorMax ? Number(filterValorMax) : null;
+      const qtdMin = filterQtdItensMin ? Number(filterQtdItensMin) : null;
+      const qtdMax = filterQtdItensMax ? Number(filterQtdItensMax) : null;
+
+      // Tentar caminho A: query com embed de itens
+      let comandas: any[] = [];
+      let erroEmbed = false;
+
+      try {
+        let q = client
+          .from('comanda')
+          .select('id,data,codigo,tipo,observacoes,total,item(id,material,kg_total,preco_kg,valor_total)');
+
+        // Aplicar filtros
+        if (tipoValue && (tipoValue === 'compra' || tipoValue === 'venda')) {
+          q = q.eq('tipo', tipoValue);
+        }
+        if (dataInicioISO) {
+          q = q.gte('data', dataInicioISO);
+        }
+        if (dataFimISO) {
+          q = q.lte('data', dataFimISO);
+        }
+        if (valorMin != null && Number.isFinite(valorMin)) {
+          q = q.gte('total', valorMin);
+        }
+        if (valorMax != null && Number.isFinite(valorMax)) {
+          q = q.lte('total', valorMax);
+        }
+
+        // Ordenação
+        q = q.order('data', { ascending: filterOrder === 'asc' });
+
+        const { data, error } = await q;
+
+        if (error) {
+          // Se erro de relacionamento, tentar caminho B
+          if (error.message?.includes('relation') || error.message?.includes('foreign')) {
+            erroEmbed = true;
+          } else {
+            throw error;
+          }
+        } else if (data) {
+          comandas = data;
+        }
+      } catch (err: any) {
+        // Se erro de relacionamento, tentar caminho B
+        if (err.message?.includes('relation') || err.message?.includes('foreign')) {
+          erroEmbed = true;
+        } else {
+          throw err;
+        }
+      }
+
+      // Caminho B: fallback com 2 queries
+      if (erroEmbed || comandas.length === 0) {
+        // Primeira query: comandas
+        let qComandas = client
+          .from('comanda')
+          .select('id,data,codigo,tipo,observacoes,total');
+
+        if (tipoValue && (tipoValue === 'compra' || tipoValue === 'venda')) {
+          qComandas = qComandas.eq('tipo', tipoValue);
+        }
+        if (dataInicioISO) {
+          qComandas = qComandas.gte('data', dataInicioISO);
+        }
+        if (dataFimISO) {
+          qComandas = qComandas.lte('data', dataFimISO);
+        }
+        if (valorMin != null && Number.isFinite(valorMin)) {
+          qComandas = qComandas.gte('total', valorMin);
+        }
+        if (valorMax != null && Number.isFinite(valorMax)) {
+          qComandas = qComandas.lte('total', valorMax);
+        }
+
+        qComandas = qComandas.order('data', { ascending: filterOrder === 'asc' });
+
+        const { data: dataComandas, error: errComandas } = await qComandas;
+
+        if (errComandas) {
+          throw errComandas;
+        }
+
+        if (!dataComandas || dataComandas.length === 0) {
+          setFilteredResults([]);
+          setFiltersOpen(false);
+          return;
+        }
+
+        const ids = dataComandas.map((c: any) => c.id).filter((id: any) => id != null);
+
+        if (ids.length === 0) {
+          setFilteredResults([]);
+          setFiltersOpen(false);
+          return;
+        }
+
+        // Segunda query: itens
+        const { data: dataItens, error: errItens } = await client
+          .from('item')
+          .select('id,material,kg_total,preco_kg,valor_total,comanda')
+          .in('comanda', ids);
+
+        if (errItens) {
+          throw errItens;
+        }
+
+        // Agrupar itens por comanda
+        const itensPorComanda: Record<number, any[]> = {};
+        if (dataItens) {
+          for (const item of dataItens) {
+            const comandaId = item.comanda;
+            if (comandaId != null) {
+              if (!itensPorComanda[comandaId]) {
+                itensPorComanda[comandaId] = [];
+              }
+              itensPorComanda[comandaId].push(item);
+            }
+          }
+        }
+
+        // Anexar itens às comandas
+        comandas = dataComandas.map((c: any) => ({
+          ...c,
+          item: itensPorComanda[c.id] || [],
+        }));
+      }
+
+      // Filtrar por quantidade de itens (client-side)
+      let filtered = comandas;
+      if (qtdMin != null || qtdMax != null) {
+        filtered = comandas.filter((c: any) => {
+          const items = c.item ?? c.items ?? [];
+          const qtd = Array.isArray(items) ? items.length : 0;
+          if (qtdMin != null && qtd < qtdMin) return false;
+          if (qtdMax != null && qtd > qtdMax) return false;
+          return true;
+        });
+      }
+
+      // Mapear para o formato de rows
+      const mapped = filtered
+        .map((r: any) => {
+          if (!r?.id || Number.isNaN(Number(r.id))) return null;
+
+          const items = Array.isArray(r.item ?? r.items) ? (r.item ?? r.items) : [];
+          const itemsMapped = items.map((it: any) => ({
+            item_id: it?.id ?? null,
+            material_id: it?.material ?? null,
+            kg_total: Number(it?.kg_total ?? 0),
+            preco_kg: Number(it?.preco_kg ?? 0),
+            item_valor_total: Number(it?.valor_total ?? 0),
+            __source: 'filtered' as const,
+          }));
+
+          const comanda_total = itemsMapped.reduce(
+            (acc: number, it: any) => acc + (Number(it.item_valor_total) || 0),
+            0
+          );
+
+          let comanda_data: string | null = null;
+          if (r?.data) {
+            try {
+              const d = new Date(r.data);
+              if (!Number.isNaN(d.getTime())) {
+                comanda_data = d.toISOString();
+              }
+            } catch {}
+          }
+
+          return {
+            comanda_id: Number(r.id),
+            comanda_data,
+            codigo: r?.codigo ?? null,
+            comanda_tipo: r?.tipo ?? null,
+            observacoes: r?.observacoes ?? null,
+            criado_por: null,
+            comanda_total,
+            origem_offline: 0,
+            __is_pending: false,
+            items: itemsMapped,
+          };
+        })
+        .filter(Boolean);
+
+      setFilteredResults(mapped);
+      setFiltersOpen(false);
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao aplicar filtros',
+        description: err?.message || 'Não foi possível aplicar os filtros.',
+        variant: 'destructive' as any,
+      });
+    }
+  }
+
+  function clearFilters() {
+    setFilterTipo(null);
+    setFilterDataInicio(null);
+    setFilterDataFim(null);
+    setFilterValorMin(null);
+    setFilterValorMax(null);
+    setFilterQtdItensMin(null);
+    setFilterQtdItensMax(null);
+    setFilterOrder('desc');
+    setFilteredResults(null);
+  }
+
   async function openItemsDialog(group: any, index: number) {
     // Determine codigo as primary key for item fetch/merge
     const codigo = getDisplayCodigo(group);
@@ -528,32 +799,45 @@ const HistoricoComandas = () => {
         </div>
 
         {/* Barra de busca */}
-        <div className="mb-4 relative">
-          <Input
-            placeholder="Buscar por código, data ou observação..."
-            value={searchTerm}
-            onChange={(e) => { const v = e.target.value; setSearchTerm(v); void performSearch(v); }}
-            className="pr-10"
-          />
-          {searchTerm && (
-            <button
-              type="button"
-              aria-label="Limpar busca"
-              onClick={() => { setSearchTerm(''); setSearchResults([]); }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
+        <div className="mb-4 flex gap-2">
+          <div className="relative flex-1">
+            <Input
+              placeholder="Buscar por código, data ou observação..."
+              value={searchTerm}
+              onChange={(e) => { const v = e.target.value; setSearchTerm(v); void performSearch(v); }}
+              className="pr-10"
+            />
+            {searchTerm && (
+              <button
+                type="button"
+                aria-label="Limpar busca"
+                onClick={() => { setSearchTerm(''); setSearchResults([]); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFiltersOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filtros
+          </Button>
         </div>
 
         {loading ? (
           <div className="text-center text-muted-foreground">Carregando...</div>
-        ) : (searchTerm ? searchResults.length === 0 : rows.length === 0) ? (
-          <Card className="p-6 text-center text-muted-foreground">Nenhuma comanda recente.</Card>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {(searchTerm ? searchResults : rows).map((c, idx) => {
+        ) : (() => {
+          const dataToShow = filteredResults ?? (searchTerm ? searchResults : rows);
+          return dataToShow.length === 0 ? (
+            <Card className="p-6 text-center text-muted-foreground">Nenhuma comanda recente.</Card>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {dataToShow.map((c, idx) => {
               return (
                 <Card
                   key={`${c.comanda_id ?? 'pending'}-${idx}`}
@@ -601,9 +885,10 @@ const HistoricoComandas = () => {
                   )}
                 </Card>
               );
-            })}
-          </div>
-        )}
+              })}
+            </div>
+          );
+        })()}
       </Card>
       {/* Dialog de Itens da Comanda */}
       <Dialog open={isItemsDialogOpen} onOpenChange={setIsItemsDialogOpen}>
@@ -750,6 +1035,159 @@ const HistoricoComandas = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Dialog de Filtros Avançados */}
+      <Dialog open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <DialogContent className="mx-auto max-w-2xl w-full rounded-2xl p-0 overflow-hidden animate-in fade-in-0 zoom-in-95 duration-200">
+          <DialogHeader className="p-6 border-b">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <SlidersHorizontal className="h-5 w-5" />
+              Filtros Avançados
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+            {/* Tipo */}
+            <div className="space-y-2">
+              <Label htmlFor="filter-tipo">Tipo</Label>
+              <Select
+                value={filterTipo ?? 'all'}
+                onValueChange={(value) => setFilterTipo(value === 'all' ? null : value)}
+              >
+                <SelectTrigger id="filter-tipo" className="w-full">
+                  <SelectValue placeholder="Todos os tipos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os tipos</SelectItem>
+                  <SelectItem value="compra">Compra</SelectItem>
+                  <SelectItem value="venda">Venda</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Data Início */}
+            <div className="space-y-2">
+              <Label htmlFor="filter-data-inicio">Data Início</Label>
+              <Input
+                id="filter-data-inicio"
+                type="datetime-local"
+                value={filterDataInicio || ''}
+                onChange={(e) => setFilterDataInicio(e.target.value || null)}
+                className="w-full"
+              />
+            </div>
+
+            {/* Data Fim */}
+            <div className="space-y-2">
+              <Label htmlFor="filter-data-fim">Data Fim</Label>
+              <Input
+                id="filter-data-fim"
+                type="datetime-local"
+                value={filterDataFim || ''}
+                onChange={(e) => setFilterDataFim(e.target.value || null)}
+                className="w-full"
+              />
+            </div>
+
+            {/* Valor Mínimo */}
+            <div className="space-y-2">
+              <Label htmlFor="filter-valor-min">Valor Total Mínimo</Label>
+              <Input
+                id="filter-valor-min"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={filterValorMin || ''}
+                onChange={(e) => setFilterValorMin(e.target.value || null)}
+                className="w-full"
+              />
+            </div>
+
+            {/* Valor Máximo */}
+            <div className="space-y-2">
+              <Label htmlFor="filter-valor-max">Valor Total Máximo</Label>
+              <Input
+                id="filter-valor-max"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={filterValorMax || ''}
+                onChange={(e) => setFilterValorMax(e.target.value || null)}
+                className="w-full"
+              />
+            </div>
+
+            {/* Quantidade de Itens Mínimo */}
+            <div className="space-y-2">
+              <Label htmlFor="filter-qtd-itens-min">Quantidade de Itens Mínima</Label>
+              <Input
+                id="filter-qtd-itens-min"
+                type="number"
+                step="1"
+                placeholder="0"
+                value={filterQtdItensMin || ''}
+                onChange={(e) => setFilterQtdItensMin(e.target.value || null)}
+                className="w-full"
+              />
+            </div>
+
+            {/* Quantidade de Itens Máximo */}
+            <div className="space-y-2">
+              <Label htmlFor="filter-qtd-itens-max">Quantidade de Itens Máxima</Label>
+              <Input
+                id="filter-qtd-itens-max"
+                type="number"
+                step="1"
+                placeholder="0"
+                value={filterQtdItensMax || ''}
+                onChange={(e) => setFilterQtdItensMax(e.target.value || null)}
+                className="w-full"
+              />
+            </div>
+
+            {/* Ordenação */}
+            <div className="space-y-2">
+              <Label htmlFor="filter-order">Ordenação</Label>
+              <Select value={filterOrder} onValueChange={(value: 'asc' | 'desc') => setFilterOrder(value)}>
+                <SelectTrigger id="filter-order" className="w-full">
+                  <SelectValue placeholder="Selecione a ordenação" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="desc">Mais recente → Mais antigo</SelectItem>
+                  <SelectItem value="asc">Mais antigo → Mais recente</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  clearFilters();
+                  setFiltersOpen(false);
+                }}
+                className="flex-1"
+              >
+                Limpar
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setFiltersOpen(false)}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="default"
+                onClick={() => void applyFilters()}
+                className="flex-1"
+              >
+                Aplicar Filtros
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

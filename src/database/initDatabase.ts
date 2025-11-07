@@ -326,6 +326,8 @@ const EXPECTED_TABLES = [
 let sqliteConnection: SQLiteConnection | null = null;
 let db: SQLiteDBConnection | null = null;
 let isInitialized = false;
+let initializingPromise: Promise<SQLiteDBConnection> | null = null;
+let isInitializing = false;
 
 /**
  * Initialize the SQLite plugin and connection
@@ -452,80 +454,95 @@ export async function initializeDatabase(): Promise<SQLiteDBConnection> {
     return db;
   }
 
-  try {
-    logger.info('🚀 Starting database initialization...');
-
-    // Initialize SQLite plugin
-    const connection = await initializeSQLitePlugin();
-
-    // Check if database already exists
-    const dbExists = await checkDatabaseExists(connection);
-
-    if (dbExists) {
-      logger.info('📂 Database already exists, opening connection...');
-      
-      // Open existing database
-      db = await connection.createConnection(
-        DB_NAME,
-        DB_ENCRYPTED,
-        DB_MODE,
-        DB_VERSION,
-        false
-      );
-      await db.open();
-      
-      logger.info('✅ Connected to existing database successfully');
-    } else {
-      logger.info('🆕 Database does not exist, creating new database...');
-      
-      // Create new database and execute schema
-      db = await createDatabase(connection);
-      
-      logger.info('✅ New database created successfully');
-    }
-
-    // Verify all tables exist
-    await verifyTables(db);
-
-    // Ensure comanda_20 has criado_por column (migration for existing databases)
-    try {
-      await db.run('ALTER TABLE comanda_20 ADD COLUMN criado_por TEXT');
-      logger.info('✅ Added criado_por column to comanda_20 table');
-    } catch (error: any) {
-      // Column already exists or table doesn't exist yet - ignore error
-      if (error?.message?.includes('duplicate column') || error?.message?.includes('no such table')) {
-        logger.info('ℹ️ Column criado_por already exists or table not found (ignored)');
-      } else {
-        logger.warn('⚠️ Could not add criado_por column to comanda_20:', error);
-      }
-    }
-
-    // Ensure material has display_order column (migration for existing databases)
-    try {
-      await db.run('ALTER TABLE material ADD COLUMN display_order INTEGER DEFAULT 9999');
-      logger.info('✅ Added display_order column to material table');
-    } catch (error: any) {
-      // Column already exists - ignore error
-      if (error?.message?.includes('duplicate column') || error?.message?.includes('no such table')) {
-        logger.info('ℹ️ Column display_order already exists or table not found (ignored)');
-      } else {
-        logger.warn('⚠️ Could not add display_order column to material:', error);
-      }
-    }
-
-    // Mark as initialized
-    isInitialized = true;
-
-    logger.info('🎉 Database initialization completed successfully!');
-    logger.info(`📍 Database location: ${DB_NAME}`);
-    logger.info(`📊 Total tables: ${EXPECTED_TABLES.length}`);
-
-    return db;
-
-  } catch (error) {
-    logger.error('❌ Database initialization failed:', error);
-    throw new Error(`Failed to initialize SQLite database: ${error instanceof Error ? error.message : String(error)}`);
+  // If already initializing, return the existing promise
+  if (isInitializing && initializingPromise) {
+    logger.info('⏳ Database initialization in progress, waiting for existing promise...');
+    return initializingPromise;
   }
+
+  // Set flag and create promise
+  isInitializing = true;
+  initializingPromise = (async () => {
+    try {
+      logger.info('🚀 Starting database initialization...');
+
+      // Initialize SQLite plugin
+      const connection = await initializeSQLitePlugin();
+
+      // Check if database already exists
+      const dbExists = await checkDatabaseExists(connection);
+
+      if (dbExists) {
+        logger.info('📂 Database already exists, opening connection...');
+        
+        // Open existing database
+        db = await connection.createConnection(
+          DB_NAME,
+          DB_ENCRYPTED,
+          DB_MODE,
+          DB_VERSION,
+          false
+        );
+        await db.open();
+        
+        logger.info('✅ Connected to existing database successfully');
+      } else {
+        logger.info('🆕 Database does not exist, creating new database...');
+        
+        // Create new database and execute schema
+        db = await createDatabase(connection);
+        
+        logger.info('✅ New database created successfully');
+      }
+
+      // Verify all tables exist
+      await verifyTables(db);
+
+      // Ensure comanda_20 has criado_por column (migration for existing databases)
+      try {
+        await db.run('ALTER TABLE comanda_20 ADD COLUMN criado_por TEXT');
+        logger.info('✅ Added criado_por column to comanda_20 table');
+      } catch (error: any) {
+        // Column already exists or table doesn't exist yet - ignore error
+        if (error?.message?.includes('duplicate column') || error?.message?.includes('no such table')) {
+          logger.info('ℹ️ Column criado_por already exists or table not found (ignored)');
+        } else {
+          logger.warn('⚠️ Could not add criado_por column to comanda_20:', error);
+        }
+      }
+
+      // Ensure material has display_order column (migration for existing databases)
+      try {
+        await db.run('ALTER TABLE material ADD COLUMN display_order INTEGER DEFAULT 9999');
+        logger.info('✅ Added display_order column to material table');
+      } catch (error: any) {
+        // Column already exists - ignore error
+        if (error?.message?.includes('duplicate column') || error?.message?.includes('no such table')) {
+          logger.info('ℹ️ Column display_order already exists or table not found (ignored)');
+        } else {
+          logger.warn('⚠️ Could not add display_order column to material:', error);
+        }
+      }
+
+      // Mark as initialized
+      isInitialized = true;
+      isInitializing = false;
+
+      logger.info('🎉 Database initialization completed successfully!');
+      logger.info(`📍 Database location: ${DB_NAME}`);
+      logger.info(`📊 Total tables: ${EXPECTED_TABLES.length}`);
+
+      return db;
+
+    } catch (error) {
+      isInitializing = false;
+      initializingPromise = null;
+      logger.error('❌ Database initialization failed:', error);
+      throw new Error(`Failed to initialize SQLite database: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  })();
+
+  return initializingPromise;
 }
 
 /**
