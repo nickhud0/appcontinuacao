@@ -29,12 +29,14 @@ const Ultimos = () => {
     async function load() {
       try {
         setLoading(true);
-        const confirmadas = await selectAll<any>('ultimas_20', 'data DESC');
+        const confirmadas = await executeQuery<any>(
+          "SELECT id, data, material, comanda, preco_kg, kg_total, valor_total, tipo FROM ultimas_20 ORDER BY data DESC"
+        );
 
         const pendentesRows = await selectWhere<any>(
           'sync_queue',
-          'synced = ? AND table_name = ? AND operation = ?',
-          [0, 'item', 'INSERT'],
+          'synced = ? AND operation = ? AND (table_name = ? OR table_name = ?)',
+          [0, 'INSERT', 'item', 'ultimas_20'],
           'created_at DESC'
         );
 
@@ -53,15 +55,19 @@ const Ultimos = () => {
           const valorTotal = Number(payload.valor_total ?? payload.total ?? payload.item_valor_total ?? 0) || 0;
           const precoKg = Number(payload.preco_kg ?? payload.precoKg ?? payload.preco ?? 0) || 0;
 
+          const comandaId = Number(payload.comanda ?? payload.comanda_id ?? payload.comandaId ?? 0) || 0;
+          const tipoPayload = payload.tipo ? String(payload.tipo).trim().toLowerCase() : null;
           return {
             id: `pending-${row.id}`,
             record_id: row.record_id,
             data: payload.data || payload.item_data || row.created_at,
             material: materialId || null,
+            comanda: comandaId || null,
             material_nome: '',
             kg_total: kgTotal,
             valor_total: valorTotal,
             preco_kg: precoKg,
+            tipo: tipoPayload ?? (Number(kgTotal) < 0 ? 'venda' : 'compra'),
             client_uuid: payload.client_uuid || payload.uuid || null,
             __pending: true,
             origem_offline: 1
@@ -98,13 +104,19 @@ const Ultimos = () => {
           ...c,
           material_nome: idToName.get(Number(c.material) || 0) || 'Desconhecido',
           preco_kg: Number(c.preco_kg) || 0,
+          tipo: c.tipo === 'venda' ? 'venda' : 'compra', // usar a coluna existente
           __pending: false,
           client_uuid: null
         }));
-        const pendentesResolved = (pendentes || []).map((p: any) => ({
-          ...p,
-          material_nome: p.material ? (idToName.get(Number(p.material) || 0) || 'Desconhecido') : 'Desconhecido'
-        }));
+        const pendentesResolved = (pendentes || []).map((p: any) => {
+          const materialId = Number(p.material) || 0;
+          const tipoFinal = p.tipo ?? (Number(p.kg_total) >= 0 ? 'compra' : 'venda');
+          return {
+            ...p,
+            material_nome: materialId ? (idToName.get(materialId) || 'Desconhecido') : 'Desconhecido',
+            tipo: tipoFinal
+          };
+        });
 
         function pad(n: number) { return n < 10 ? `0${n}` : String(n); }
         function normalizeDateMinute(d: any): string {
@@ -232,8 +244,8 @@ const Ultimos = () => {
                       {it.material_nome || 'Desconhecido'}
                     </div>
                     <div className="mt-1 flex items-center gap-2">
-                      <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs ${Number(it.kg_total) >= 0 ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
-                        {Number(it.kg_total) >= 0 ? 'Compra' : 'Venda'}
+                      <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs ${it.tipo === 'venda' ? 'bg-green-50 text-green-600' : 'bg-blue-50 text-blue-600'}`}>
+                        {it.tipo === 'venda' ? 'Venda' : 'Compra'}
                       </span>
                       <span className="text-sm text-muted-foreground whitespace-nowrap">
                         {Math.abs(Number(it.kg_total) || 0)} kg • {formatCurrency(Number(it.preco_kg) || 0)}/kg

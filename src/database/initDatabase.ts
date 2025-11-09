@@ -228,6 +228,7 @@ CREATE TABLE IF NOT EXISTS ultimas_20 (
   preco_kg REAL,
   kg_total REAL,
   valor_total REAL,
+  tipo TEXT,
   criado_por TEXT,
   atualizado_por TEXT,
   data_sync TEXT,
@@ -521,6 +522,25 @@ export async function initializeDatabase(): Promise<SQLiteDBConnection> {
           logger.info('ℹ️ Column display_order already exists or table not found (ignored)');
         } else {
           logger.warn('⚠️ Could not add display_order column to material:', error);
+        }
+      }
+
+      // Ensure ultimas_20 has tipo column (migration for existing databases)
+      try {
+        const tableInfo = await db.query('PRAGMA table_info(ultimas_20)');
+        const hasTipoColumn = tableInfo.values?.some((row: any) => row.name === 'tipo');
+        if (!hasTipoColumn) {
+          await db.run('ALTER TABLE ultimas_20 ADD COLUMN tipo TEXT');
+          logger.info('✅ Added tipo column to ultimas_20 table');
+        } else {
+          logger.info('ℹ️ Column tipo already exists in ultimas_20 (ignored)');
+        }
+      } catch (error: any) {
+        // Column already exists or table doesn't exist yet - ignore error
+        if (error?.message?.includes('duplicate column') || error?.message?.includes('no such table')) {
+          logger.info('ℹ️ Column tipo already exists or table not found (ignored)');
+        } else {
+          logger.warn('⚠️ Could not add tipo column to ultimas_20:', error);
         }
       }
 
