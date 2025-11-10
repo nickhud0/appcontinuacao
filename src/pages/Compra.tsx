@@ -11,6 +11,7 @@ import { formatCurrency } from "@/utils/formatters";
 import { selectAll, addToSyncQueue, insert } from "@/database";
 import { getSyncStatus } from "@/services/syncEngine";
 import { useGlobalShortcuts } from "@/shortcuts";
+import { useItemQuickSelect } from "@/hooks/useItemQuickSelect";
 
 const Compra = () => {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
@@ -96,6 +97,12 @@ const Compra = () => {
     setDesconto("");
     setIsDialogOpen(true);
   };
+
+  // Hook para seleção rápida de materiais com '*'
+  const { QuickSelectInput } = useItemQuickSelect({
+    materiais,
+    handleMaterialClick,
+  });
 
   const handleAdicionar = async () => {
     if (!selectedMaterial || !peso) return;
@@ -379,6 +386,9 @@ const Compra = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Input de seleção rápida com '*' */}
+      <QuickSelectInput />
     </div>
   );
 };

@@ -40,7 +40,52 @@ const Ultimos = () => {
           'created_at DESC'
         );
 
-        const pendentes = (pendentesRows || []).map((row: any) => {
+        async function tryGetTipoDaComanda(comandaId: number): Promise<string | null> {
+          if (comandaId <= 0) return null;
+          try {
+            const r = await executeQuery<{ tipo: string }>(
+              "SELECT tipo FROM ultimas_20 WHERE comanda = ? ORDER BY data DESC LIMIT 1",
+              [comandaId]
+            );
+            const t = (r?.[0]?.tipo || "").trim().toLowerCase();
+            return (t === "venda" || t === "compra") ? t : null;
+          } catch {
+            return null;
+          }
+        }
+
+        async function tryGetTipoByCodigo(codigo: string): Promise<string | null> {
+          if (!codigo || codigo.trim() === '') return null;
+          try {
+            const r = await executeQuery<{ tipo: string }>(
+              "SELECT tipo FROM ultimas_20 WHERE codigo = ? ORDER BY data DESC LIMIT 1",
+              [codigo]
+            );
+            const t = (r?.[0]?.tipo || "").trim().toLowerCase();
+            return (t === "venda" || t === "compra") ? t : null;
+          } catch {
+            return null;
+          }
+        }
+
+        const pendentesComandas = await executeQuery(
+          "SELECT payload FROM sync_queue WHERE synced = 0 AND table_name = 'comanda' AND operation IN ('INSERT','UPSERT')"
+        );
+
+        const mapComandaTipoOffline = new Map<string, string>();
+        for (const row of pendentesComandas) {
+          try {
+            const payload = JSON.parse(row.payload ?? row.PAYLOAD ?? "{}");
+            const codigo = (payload?.codigo ?? "").toString().trim();
+            const tipo = (payload?.tipo ?? "").toString().trim().toLowerCase();
+            if (codigo && (tipo === 'compra' || tipo === 'venda')) {
+              mapComandaTipoOffline.set(codigo, tipo);
+            }
+          } catch {}
+        }
+
+        const pendentes: any[] = [];
+        for (const row of (pendentesRows || [])) {
           let payload: any = {};
           try {
             const parsed = JSON.parse(row.payload || '{}');
@@ -48,31 +93,55 @@ const Ultimos = () => {
           } catch (e) {
             // ignore invalid json
           }
-          const materialId = Number(
-            payload.material ?? payload.material_id ?? payload.materialId ?? 0
-          ) || 0;
-          const kgTotal = Number(payload.kg_total ?? payload.kg ?? 0) || 0;
-          const valorTotal = Number(payload.valor_total ?? payload.total ?? payload.item_valor_total ?? 0) || 0;
-          const precoKg = Number(payload.preco_kg ?? payload.precoKg ?? payload.preco ?? 0) || 0;
-
           const comandaId = Number(payload.comanda ?? payload.comanda_id ?? payload.comandaId ?? 0) || 0;
-          const tipoPayload = payload.tipo ? String(payload.tipo).trim().toLowerCase() : null;
-          return {
+          const materialId = Number(payload.material ?? payload.material_id ?? payload.materialId ?? 0) || 0;
+          const precoKg = Number(payload.preco_kg ?? payload.precoKg ?? payload.preco ?? 0) || 0;
+          const kgTotal = Number(payload.kg_total ?? payload.kgTotal ?? payload.kg ?? 0) || 0;
+          const valorTotal = Number(payload.valor_total ?? payload.total ?? payload.item_valor_total ?? 0) || 0;
+
+          let materialNome = 'Desconhecido';
+          if (materialId > 0) {
+            try {
+              const mat = await executeQuery<{ nome: string }>(
+                "SELECT nome FROM material WHERE id = ? LIMIT 1",
+                [materialId]
+              );
+              materialNome = mat?.[0]?.nome ?? 'Desconhecido';
+            } catch {
+              materialNome = 'Desconhecido';
+            }
+          }
+
+          const codigo = (payload?.codigo ?? "").toString().trim() || null;
+          const tipoFromPayload = payload?.tipo ? String(payload.tipo).trim().toLowerCase() : null;
+          const tipoFromOfflineMap = codigo ? (mapComandaTipoOffline.get(codigo) ?? null) : null;
+          const tipoFromCodigoLocal = codigo ? (await tryGetTipoByCodigo(codigo)) : null;
+          const tipoFromComandaId = await tryGetTipoDaComanda(comandaId); // já existente (por comanda)
+
+          const tipoFinal =
+            (tipoFromPayload === 'compra' || tipoFromPayload === 'venda') ? tipoFromPayload :
+            (tipoFromOfflineMap === 'compra' || tipoFromOfflineMap === 'venda') ? tipoFromOfflineMap :
+            (tipoFromCodigoLocal === 'compra' || tipoFromCodigoLocal === 'venda') ? tipoFromCodigoLocal :
+            (tipoFromComandaId === 'compra' || tipoFromComandaId === 'venda') ? tipoFromComandaId :
+            (kgTotal < 0 ? 'venda' : 'compra');
+          const pData = payload.data || payload.item_data || row.created_at;
+
+          pendentes.push({
             id: `pending-${row.id}`,
             record_id: row.record_id,
-            data: payload.data || payload.item_data || row.created_at,
+            data: pData,
             material: materialId || null,
             comanda: comandaId || null,
-            material_nome: '',
+            material_nome: materialNome,
             kg_total: kgTotal,
-            valor_total: valorTotal,
             preco_kg: precoKg,
-            tipo: tipoPayload ?? (Number(kgTotal) < 0 ? 'venda' : 'compra'),
-            client_uuid: payload.client_uuid || payload.uuid || null,
+            valor_total: valorTotal,
+            tipo: tipoFinal,
             __pending: true,
-            origem_offline: 1
-          } as any;
-        });
+            origem_offline: 1,
+            client_uuid: payload.client_uuid ?? payload.uuid ?? null
+          } as any);
+        }
 
         // Resolve material names
         const neededMaterialIds = new Set<number>();
@@ -108,15 +177,12 @@ const Ultimos = () => {
           __pending: false,
           client_uuid: null
         }));
-        const pendentesResolved = (pendentes || []).map((p: any) => {
-          const materialId = Number(p.material) || 0;
-          const tipoFinal = p.tipo ?? (Number(p.kg_total) >= 0 ? 'compra' : 'venda');
-          return {
-            ...p,
-            material_nome: materialId ? (idToName.get(materialId) || 'Desconhecido') : 'Desconhecido',
-            tipo: tipoFinal
-          };
-        });
+        // DEBUG: Antes do candidates
+        for (const e of [...confirmadasResolved, ...pendentes]) {
+          if (String(e.id).startsWith('pending-')) {
+            console.log('DEBUG stage=beforeCandidates', {id: e.id, tipo: e.tipo, pending: e.__pending, offline: e.origem_offline, kg: e.kg_total});
+          }
+        }
 
         function pad(n: number) { return n < 10 ? `0${n}` : String(n); }
         function normalizeDateMinute(d: any): string {
@@ -163,13 +229,20 @@ const Ultimos = () => {
           return 1; // pending + unknown name
         }
 
-        const candidates = [...confirmadasResolved, ...pendentesResolved].sort((a: any, b: any) => {
+        const candidates = [...confirmadasResolved, ...pendentes].sort((a: any, b: any) => {
           const rdiff = rank(b) - rank(a);
           if (rdiff !== 0) return rdiff;
           const da = a?.data ? new Date(a.data).getTime() : 0;
           const db = b?.data ? new Date(b.data).getTime() : 0;
           return db - da;
         });
+
+        // DEBUG: Depois do candidates
+        for (const e of candidates) {
+          if (String(e.id).startsWith('pending-')) {
+            console.log('DEBUG stage=afterCandidates', {id: e.id, tipo: e.tipo, pending: e.__pending, offline: e.origem_offline, kg: e.kg_total});
+          }
+        }
 
         const seen = new Set<string>();
         const seenLoose = new Set<string>();
@@ -191,11 +264,25 @@ const Ultimos = () => {
           seenLoose.add(lk);
         }
 
+        // DEBUG: Depois do unique (deduplicação)
+        for (const e of unique) {
+          if (String(e.id).startsWith('pending-')) {
+            console.log('DEBUG stage=afterUnique', {id: e.id, tipo: e.tipo, pending: e.__pending, offline: e.origem_offline, kg: e.kg_total});
+          }
+        }
+
         const unificada = unique.sort((a: any, b: any) => {
           const da = a?.data ? new Date(a.data).getTime() : 0;
           const db = b?.data ? new Date(b.data).getTime() : 0;
           return db - da;
         }).slice(0, 20);
+
+        // DEBUG: Antes do setItems
+        for (const e of unificada) {
+          if (String(e.id).startsWith('pending-')) {
+            console.log('DEBUG stage=beforeSetItems', {id: e.id, tipo: e.tipo, pending: e.__pending, offline: e.origem_offline, kg: e.kg_total});
+          }
+        }
 
         setItems(unificada);
       } catch (error) {
