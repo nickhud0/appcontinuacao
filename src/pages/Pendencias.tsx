@@ -335,7 +335,7 @@ const Pendencias = () => {
                 className="w-full justify-between rounded-lg"
                 onClick={() => setIsTipoDialogOpen(true)}
               >
-                <span className="text-sm sm:text-base">{tipo === 'a_pagar' ? 'A pagar' : 'A receber'}</span>
+                <span className="text-sm sm:text-base">{tipo === 'a_pagar' ? 'Devemos' : 'Nos Deve'}</span>
               </Button>
             </div>
           </div>
@@ -390,7 +390,7 @@ const Pendencias = () => {
                     </div>
                   )}
                   <div className="text-sm sm:text-base text-muted-foreground mt-0.5">
-                    {formatCurrency(Number(p.valor) || 0)} • {(p.tipo === 'a_pagar' ? 'A pagar' : 'A receber')} • {new Date(p.data).toLocaleString()}
+                    {formatCurrency(Number(p.valor) || 0)} • {(p.tipo === 'a_pagar' ? 'Devemos' : 'Nos Deve')} • {new Date(p.data).toLocaleString()}
                   </div>
                 </div>
                 
@@ -457,14 +457,14 @@ const Pendencias = () => {
               className="w-full justify-start rounded-lg text-left text-sm sm:text-base"
               onClick={() => { setTipo('a_pagar'); setIsTipoDialogOpen(false); }}
             >
-              A pagar
+              Devemos
             </Button>
             <Button
               variant={tipo === 'a_receber' ? 'secondary' : 'ghost'}
               className="w-full justify-start rounded-lg text-left text-sm sm:text-base"
               onClick={() => { setTipo('a_receber'); setIsTipoDialogOpen(false); }}
             >
-              A receber
+              Nos Deve
             </Button>
           </div>
           <DialogFooter>
@@ -508,7 +508,7 @@ const Pendencias = () => {
                   className="w-full justify-between rounded-lg"
                   onClick={() => setIsEditTipoDialogOpen(true)}
                 >
-                  <span className="text-sm sm:text-base">{editTipo === 'a_pagar' ? 'A pagar' : 'A receber'}</span>
+                  <span className="text-sm sm:text-base">{editTipo === 'a_pagar' ? 'Devemos' : 'Nos Deve'}</span>
                 </Button>
               </div>
             </div>
@@ -545,14 +545,14 @@ const Pendencias = () => {
               className="w-full justify-start rounded-lg text-left text-sm sm:text-base"
               onClick={() => { setEditTipo('a_pagar'); setIsEditTipoDialogOpen(false); }}
             >
-              A pagar
+              Devemos
             </Button>
             <Button
               variant={editTipo === 'a_receber' ? 'secondary' : 'ghost'}
               className="w-full justify-start rounded-lg text-left text-sm sm:text-base"
               onClick={() => { setEditTipo('a_receber'); setIsEditTipoDialogOpen(false); }}
             >
-              A receber
+              Nos Deve
             </Button>
           </div>
           <DialogFooter>
@@ -575,7 +575,7 @@ const Pendencias = () => {
                   <span className="font-medium">Valor:</span> {formatCurrency(Number(editValor) || 0)}
                 </div>
                 <div>
-                  <span className="font-medium">Tipo:</span> {editTipo === 'a_pagar' ? 'A pagar' : 'A receber'}
+                  <span className="font-medium">Tipo:</span> {editTipo === 'a_pagar' ? 'Devemos' : 'Nos Deve'}
                 </div>
               </div>
             </AlertDialogDescription>
