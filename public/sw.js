@@ -1,11 +1,9 @@
 const CACHE_NAME = 'reciclagem-pereque-v1';
 const urlsToCache = [
   '/',
-  '/static/js/bundle.js',
-  '/static/css/main.css',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png'
+  '/icon-512.png',
+  '/favicon.ico'
 ];
 
 // Instalar service worker e cachear recursos
@@ -33,6 +31,14 @@ self.addEventListener('fetch', (event) => {
           (response) => {
             // Verificar se recebemos uma response válida
             if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
+
+            // Não cachear requisições de API ou dados dinâmicos
+            const url = new URL(event.request.url);
+            if (url.pathname.startsWith('/api/') || 
+                url.pathname.includes('.db') ||
+                url.pathname.includes('supabase')) {
               return response;
             }
 
