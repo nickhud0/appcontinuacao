@@ -13,7 +13,24 @@ import { logger } from '@/utils/logger';
  * Ensure database is initialized before operations
  */
 async function ensureInitialized(): Promise<SQLiteDBConnection> {
-  return await initializeDatabase();
+  // Verificação rápida: se já está inicializado, retornar imediatamente
+  if (isDatabaseInitialized()) {
+    const existingDb = getDatabase();
+    if (existingDb) {
+      return existingDb;
+    }
+  }
+
+  // Se não está inicializado, tentar inicializar
+  // Na web, se falhar, lançar erro imediatamente para não travar
+  try {
+    return await initializeDatabase();
+  } catch (error) {
+    logger.error('❌ Database initialization failed in ensureInitialized:', error);
+    // Na web, se o SQLite não estiver disponível, lançar erro imediatamente
+    // para que as páginas possam tratar e não ficarem travadas
+    throw new Error(`Database not available: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 /**
@@ -24,6 +41,12 @@ export async function executeQuery<T = any>(
   values?: any[]
 ): Promise<T[]> {
   try {
+    // Verificação rápida antes de tentar usar o database
+    if (!isDatabaseInitialized()) {
+      logger.warn('⚠️ Database not initialized, returning empty array');
+      return [] as T[];
+    }
+
     const db = await ensureInitialized();
     
     logger.info('📋 Executing query:', query);
@@ -39,6 +62,12 @@ export async function executeQuery<T = any>(
   } catch (error) {
     logger.error('❌ Query execution failed:', error);
     logger.error('   Query:', query);
+    // Na web, se o database não estiver disponível, retornar array vazio
+    // ao invés de lançar erro para não travar as páginas
+    if (typeof window !== 'undefined') {
+      logger.warn('⚠️ Returning empty array due to database error on web platform');
+      return [] as T[];
+    }
     throw error;
   }
 }
@@ -51,6 +80,13 @@ export async function executeStatement(
   values?: any[]
 ): Promise<capSQLiteChanges> {
   try {
+    // Verificação rápida antes de tentar usar o database
+    if (!isDatabaseInitialized()) {
+      const errorMsg = `Database not initialized. Cannot execute statement. On web platform, SQLite may not be available.`;
+      logger.error(`❌ ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
     const db = await ensureInitialized();
     
     logger.info('✏️ Executing statement:', statement);
@@ -110,6 +146,13 @@ export async function insert(
   data: Record<string, any>
 ): Promise<number> {
   try {
+    // Verificação rápida antes de tentar usar o database
+    if (!isDatabaseInitialized()) {
+      const errorMsg = `Database not initialized. Cannot insert into '${table}'. On web platform, SQLite may not be available.`;
+      logger.error(`❌ ${errorMsg}`);
+      throw new Error(errorMsg);
+    }
+
     const columns = Object.keys(data);
     const placeholders = columns.map(() => '?').join(', ');
     const values = Object.values(data);
@@ -197,6 +240,11 @@ export async function selectAll<T = any>(
     return await executeQuery<T>(query);
   } catch (error) {
     logger.error(`❌ Failed to select from '${table}':`, error);
+    // Na web, se o database não estiver disponível, retornar array vazio
+    if (typeof window !== 'undefined') {
+      logger.warn(`⚠️ Returning empty array due to database error on web platform for table '${table}'`);
+      return [] as T[];
+    }
     throw error;
   }
 }
@@ -217,6 +265,11 @@ export async function selectWhere<T = any>(
     return await executeQuery<T>(query, whereValues);
   } catch (error) {
     logger.error(`❌ Failed to select from '${table}':`, error);
+    // Na web, se o database não estiver disponível, retornar array vazio
+    if (typeof window !== 'undefined') {
+      logger.warn(`⚠️ Returning empty array due to database error on web platform for table '${table}'`);
+      return [] as T[];
+    }
     throw error;
   }
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, Cloud, CloudOff, Save, RefreshCw, Bluetooth } from "lucide-react";
+import { ArrowLeft, Settings, Cloud, CloudOff, Save, RefreshCw, Bluetooth, Database } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { getSupabaseSettings, saveSupabaseSettings, getComandaPrefix, setComandaPrefix } from "@/services/settings";
 import { onSyncStatus, triggerSyncNow, notifyCredentialsUpdated, type SyncStatus } from "@/services/syncEngine";
 import { count } from "@/database";
+import { isDatabaseInitialized } from "@/database/initDatabase";
+import { Capacitor } from "@capacitor/core";
 import BluetoothPrinterModal from "@/components/BluetoothPrinterModal";
 
 const Configuracoes = () => {
@@ -31,6 +33,7 @@ const Configuracoes = () => {
   const [codigoPrefix, setCodigoPrefix] = useState("");
   const [prefixSaving, setPrefixSaving] = useState(false);
   const [isBluetoothModalOpen, setIsBluetoothModalOpen] = useState(false);
+  const [dbInitialized, setDbInitialized] = useState(false);
 
   useEffect(() => {
     // Load saved settings
@@ -41,6 +44,8 @@ const Configuracoes = () => {
     }
     // Load comanda prefix
     setCodigoPrefix(getComandaPrefix());
+    // Check database status
+    setDbInitialized(isDatabaseInitialized());
     // Subscribe to sync status
     const unsubscribe = onSyncStatus((st) => setStatus(st));
     return () => unsubscribe();
@@ -211,6 +216,31 @@ const Configuracoes = () => {
           </div>
         </div>
       </Card>
+
+      {/* Database Status Warning (Web only) */}
+      {Capacitor.getPlatform() === 'web' && !dbInitialized && (
+        <Card className="p-6 mb-6 max-w-xl mx-auto rounded-xl border border-yellow-500/50 bg-yellow-50 dark:bg-yellow-900/10 shadow-sm">
+          <div className="flex items-start gap-3">
+            <Database className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                Banco de Dados Local Não Disponível
+              </h3>
+              <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                O SQLite local não está funcionando na versão web. Algumas funcionalidades podem estar limitadas:
+              </p>
+              <ul className="text-sm text-yellow-800 dark:text-yellow-200 mt-2 ml-4 list-disc space-y-1">
+                <li>Não é possível criar novos materiais</li>
+                <li>Não é possível fazer compras ou vendas</li>
+                <li>Não é possível salvar dados localmente</li>
+              </ul>
+              <p className="text-sm text-yellow-800 dark:text-yellow-200 mt-2 font-medium">
+                💡 Use a versão mobile Android para funcionalidade completa.
+              </p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Comandas - Prefixo do Código */}
       <Card className="p-6 mb-6 max-w-xl mx-auto rounded-xl border border-border/20 shadow-sm">

@@ -78,9 +78,15 @@ const CadastrarMaterial = () => {
       // success toast removed to keep UI silent
       navigate("/");
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Erro desconhecido";
+      const isDatabaseError = errorMessage.includes('Database not initialized') || 
+                             errorMessage.includes('not available');
+      
       toast({
-        title: "Erro",
-        description: "Erro ao cadastrar material",
+        title: "Erro ao cadastrar material",
+        description: isDatabaseError 
+          ? "O banco de dados local não está disponível. Na versão web, o SQLite pode não estar funcionando. Use a versão mobile Android para funcionalidade completa."
+          : errorMessage,
         variant: "destructive"
       });
     } finally {

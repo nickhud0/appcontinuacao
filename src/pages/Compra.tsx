@@ -45,12 +45,20 @@ const Compra = () => {
         setLoadingMateriais(true);
         const rows = await selectAll<any>('material', 'display_order ASC, nome ASC');
         setMateriais(rows);
+      } catch (error) {
+        console.error('Erro ao carregar materiais:', error);
+        toast({
+          title: "Erro ao carregar materiais",
+          description: error instanceof Error ? error.message : "Não foi possível carregar os materiais. Verifique o console.",
+          variant: "destructive"
+        });
+        setMateriais([]); // Define array vazio em caso de erro
       } finally {
         setLoadingMateriais(false);
       }
     }
     void load();
-  }, []);
+  }, [toast]);
 
   // Atalhos de teclado
   useGlobalShortcuts({

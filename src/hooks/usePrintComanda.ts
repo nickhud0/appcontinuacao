@@ -21,13 +21,158 @@ export interface ComandaData {
 }
 
 const STORAGE_KEY = 'bluetooth_printer_mac';
+const STORAGE_KEY_USB_PORT = 'usb_printer_port_info'; // Para salvar info da porta USB na web
+
+// ============================================================
+// WEB SERIAL API (Para PWA - USB)
+// ============================================================
+
+// Tipos para Web Serial API
+interface SerialPortInfo {
+  portId: string; // Identificador único da porta
+  vendorId?: number;
+  productId?: number;
+}
+
+interface SerialOptions {
+  baudRate: number;
+  dataBits?: 7 | 8;
+  parity?: 'none' | 'even' | 'odd';
+  stopBits?: 1 | 2;
+  flowControl?: 'none' | 'hardware';
+}
+
+interface SerialPort {
+  getInfo(): { usbVendorId?: number; usbProductId?: number };
+  open(options: SerialOptions): Promise<void>;
+  close(): Promise<void>;
+  readable: ReadableStream<Uint8Array>;
+  writable: WritableStream<Uint8Array>;
+}
+
+interface Serial extends EventTarget {
+  requestPort(): Promise<SerialPort>;
+  getPorts(): Promise<SerialPort[]>;
+}
+
+declare global {
+  interface Navigator {
+    serial?: Serial;
+  }
+}
+
+// Verificar se Web Serial API está disponível
+const isWebSerialAvailable = (): boolean => {
+  return 'serial' in navigator && typeof navigator.serial !== 'undefined';
+};
+
+// Salvar porta USB escolhida
+const saveUsbPort = async (port: SerialPort): Promise<void> => {
+  try {
+    const info: SerialPortInfo = {
+      portId: port.getInfo().usbVendorId && port.getInfo().usbProductId
+        ? `usb-${port.getInfo().usbVendorId}-${port.getInfo().usbProductId}`
+        : `serial-${Date.now()}`,
+      vendorId: port.getInfo().usbVendorId,
+      productId: port.getInfo().usbProductId,
+    };
+    localStorage.setItem(STORAGE_KEY_USB_PORT, JSON.stringify(info));
+    console.log('[PRINT-USB] Porta USB salva:', info);
+  } catch (error) {
+    console.warn('[PRINT-USB] Erro ao salvar porta USB:', error);
+  }
+};
+
+// Obter porta USB salva (apenas info, não reconecta automaticamente)
+const getSavedUsbPortInfo = (): SerialPortInfo | null => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY_USB_PORT);
+    return saved ? JSON.parse(saved) : null;
+  } catch {
+    return null;
+  }
+};
+
+// Solicitar porta USB do usuário
+const requestUsbPort = async (): Promise<SerialPort> => {
+  if (!isWebSerialAvailable() || !navigator.serial) {
+    throw new Error('Web Serial API não está disponível. Use Chrome ou Edge.');
+  }
+
+  try {
+    const port = await navigator.serial.requestPort();
+    await saveUsbPort(port);
+    return port;
+  } catch (error: any) {
+    if (error.name === 'NotFoundError') {
+      throw new Error('Nenhuma porta USB selecionada.');
+    }
+    throw new Error(`Erro ao selecionar porta USB: ${error.message}`);
+  }
+};
+
+// Enviar dados via USB Serial
+const sendViaUsbSerial = async (commands: Uint8Array, port?: SerialPort): Promise<void> => {
+  let portToUse = port;
+  let shouldClosePort = false;
+
+  try {
+    // Se não foi passada porta, solicitar ao usuário
+    if (!portToUse) {
+      portToUse = await requestUsbPort();
+      shouldClosePort = true;
+    }
+
+    console.log('[PRINT-USB] Abrindo conexão serial...');
+    
+    // Configurações comuns para impressoras térmicas
+    await portToUse.open({ 
+      baudRate: 9600, // Padrão para impressoras térmicas (pode ser 115200 em algumas)
+      dataBits: 8,
+      parity: 'none',
+      stopBits: 1,
+      flowControl: 'none'
+    });
+
+    console.log('[PRINT-USB] Enviando dados...');
+    
+    const writer = portToUse.writable.getWriter();
+    try {
+      await writer.write(commands);
+      console.log('[PRINT-USB] Dados enviados com sucesso');
+    } finally {
+      writer.releaseLock();
+    }
+
+    // Aguardar um pouco para garantir que todos os dados foram enviados
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+  } catch (error: any) {
+    console.error('[PRINT-USB] Erro ao enviar via USB:', error);
+    throw new Error(`Erro na impressão USB: ${error.message || 'Erro desconhecido'}`);
+  } finally {
+    // Fechar porta apenas se foi aberta nesta função
+    if (shouldClosePort && portToUse) {
+      try {
+        await portToUse.close();
+        console.log('[PRINT-USB] Porta fechada');
+      } catch (closeError) {
+        console.warn('[PRINT-USB] Erro ao fechar porta:', closeError);
+      }
+    }
+  }
+};
+
+// ============================================================
+// BLUETOOTH (Para Mobile Android - CÓDIGO ORIGINAL INTACTO)
+// ============================================================
 
 // Obter o plugin Bluetooth Serial diretamente
 const getBluetoothSerial = (): any => {
   console.log('[PRINT] Obtendo plugin Bluetooth Serial...');
   
   if (!Capacitor.isNativePlatform()) {
-    throw new Error('Impressão disponível apenas em plataforma nativa');
+    throw new Error('Bluetooth disponível apenas em plataforma nativa');
   }
 
   const w = window as any;
@@ -236,54 +381,77 @@ export const usePrintComanda = () => {
     setIsPrinting(true);
     
     try {
-      // Verificar se estamos em plataforma nativa
-      if (!Capacitor.isNativePlatform()) {
-        throw new Error('Impressão disponível apenas em dispositivos móveis');
-      }
-
-      // Verificar se há impressora conectada
-      const hasPrinter = await checkPrinterConnection();
-      if (!hasPrinter) {
-        throw new Error('Nenhuma impressora conectada. Vá em Configurações e conecte uma impressora.');
-      }
-
-      // Verificar se já está conectado, se não, conectar
-      const bluetoothSerial = getBluetoothSerial();
-      const alreadyConnected = await isConnected();
-      
-      if (!alreadyConnected) {
-        console.log('[PRINT] Não conectado, conectando agora...');
-        await connectToSavedPrinter();
-        
-        // Aguardar 500ms para a impressora estar pronta após conexão
-        console.log('[PRINT] Aguardando impressora ficar pronta...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } else {
-        console.log('[PRINT] Já conectado, continuando...');
-      }
-
-      // Gerar comandos ESC/POS
+      // Gerar comandos ESC/POS (mesmo para ambas plataformas)
       const commands = generateEscPosCommands(data);
-      
-      await new Promise<void>((resolve, reject) => {
-        console.log('[PRINT] Enviando dados para impressora...');
-        bluetoothSerial.write(
-          commands,
-          () => {
-            console.log('[PRINT] Dados enviados com sucesso');
-            resolve();
-          },
-          (error: any) => {
-            console.error('[PRINT] Erro ao enviar dados:', error);
-            reject(new Error(typeof error === 'string' ? error : error?.message || 'Erro ao enviar dados'));
-          }
-        );
-      });
 
-      toast({
-        title: "Impressão realizada!",
-        description: "Comanda enviada para a impressora com sucesso.",
-      });
+      // ============================================================
+      // MOBILE ANDROID: Usa Bluetooth (CÓDIGO ORIGINAL INTACTO)
+      // ============================================================
+      if (Capacitor.isNativePlatform()) {
+        console.log('[PRINT] Modo: Mobile Android (Bluetooth)');
+
+        // Verificar se há impressora conectada
+        const hasPrinter = await checkPrinterConnection();
+        if (!hasPrinter) {
+          throw new Error('Nenhuma impressora conectada. Vá em Configurações e conecte uma impressora.');
+        }
+
+        // Verificar se já está conectado, se não, conectar
+        const bluetoothSerial = getBluetoothSerial();
+        const alreadyConnected = await isConnected();
+        
+        if (!alreadyConnected) {
+          console.log('[PRINT] Não conectado, conectando agora...');
+          await connectToSavedPrinter();
+          
+          // Aguardar 500ms para a impressora estar pronta após conexão
+          console.log('[PRINT] Aguardando impressora ficar pronta...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } else {
+          console.log('[PRINT] Já conectado, continuando...');
+        }
+
+        // Enviar via Bluetooth
+        await new Promise<void>((resolve, reject) => {
+          console.log('[PRINT] Enviando dados para impressora Bluetooth...');
+          bluetoothSerial.write(
+            commands,
+            () => {
+              console.log('[PRINT] Dados enviados com sucesso');
+              resolve();
+            },
+            (error: any) => {
+              console.error('[PRINT] Erro ao enviar dados:', error);
+              reject(new Error(typeof error === 'string' ? error : error?.message || 'Erro ao enviar dados'));
+            }
+          );
+        });
+
+        toast({
+          title: "Impressão realizada!",
+          description: "Comanda enviada para a impressora Bluetooth com sucesso.",
+        });
+
+      } 
+      // ============================================================
+      // WEB PWA: Usa USB Serial (NOVO CÓDIGO)
+      // ============================================================
+      else {
+        console.log('[PRINT] Modo: Web PWA (USB Serial)');
+
+        // Verificar se Web Serial API está disponível
+        if (!isWebSerialAvailable()) {
+          throw new Error('Impressão USB não está disponível. Use Chrome ou Edge para impressão USB.');
+        }
+
+        // Enviar via USB Serial (solicita porta se necessário)
+        await sendViaUsbSerial(commands);
+
+        toast({
+          title: "Impressão realizada!",
+          description: "Comanda enviada para a impressora USB com sucesso.",
+        });
+      }
 
     } catch (error) {
       console.error('[PRINT] Erro na impressão:', error);
@@ -301,9 +469,15 @@ export const usePrintComanda = () => {
     }
   }, [checkPrinterConnection, connectToSavedPrinter, generateEscPosCommands, isConnected, toast]);
 
+  // Verificar se impressão USB está disponível (apenas web)
+  const isUsbPrintAvailable = useCallback((): boolean => {
+    return !Capacitor.isNativePlatform() && isWebSerialAvailable();
+  }, []);
+
   return {
     isPrinting,
     printComanda,
     checkPrinterConnection,
+    isUsbPrintAvailable,
   };
 };

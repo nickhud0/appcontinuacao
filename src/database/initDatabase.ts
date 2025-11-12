@@ -347,14 +347,98 @@ async function initializeSQLitePlugin(): Promise<SQLiteConnection> {
   if (Capacitor.getPlatform() === 'web') {
     logger.info('🌐 Running on web platform - initializing jeep-sqlite...');
     
-    // For web platform, we need to use jeep-sqlite custom element
-    const jeepSqlite = document.createElement('jeep-sqlite');
-    document.body.appendChild(jeepSqlite);
+    let webStoreInitialized = false;
     
-    await customElements.whenDefined('jeep-sqlite');
-    await sqliteConnection.initWebStore();
+    try {
+      // Import jeep-sqlite dynamically for web platform
+      const { defineCustomElements } = await import('jeep-sqlite/loader');
+      await defineCustomElements(window);
+      logger.info('✅ jeep-sqlite custom elements defined');
+      
+      // Wait for custom element to be defined (with timeout)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout waiting for jeep-sqlite element')), 10000)
+      );
+      
+      await Promise.race([
+        customElements.whenDefined('jeep-sqlite'),
+        timeoutPromise
+      ]);
+      
+      logger.info('✅ jeep-sqlite custom element definition ready');
+      
+      // For web platform, we need to use jeep-sqlite custom element
+      // The element should be in the HTML, but we verify it exists
+      let jeepSqlite = document.querySelector('jeep-sqlite');
+      if (!jeepSqlite) {
+        // Se não existe no HTML, criar programaticamente
+        jeepSqlite = document.createElement('jeep-sqlite');
+        jeepSqlite.setAttribute('autoSave', 'true');
+        jeepSqlite.setAttribute('wasmPath', '/assets/sql-wasm.wasm');
+        document.body.appendChild(jeepSqlite);
+        logger.info('✅ jeep-sqlite element created programmatically');
+      } else {
+        logger.info('✅ jeep-sqlite element found in DOM');
+      }
+      
+      // Aguardar o elemento estar totalmente inicializado
+      // O jeep-sqlite precisa de tempo para carregar o WASM e inicializar o sql.js
+      // IMPORTANTE: O elemento precisa estar no DOM e o WASM precisa estar carregado
+      // antes de chamar initWebStore()
+      logger.info('⏳ Waiting for jeep-sqlite to fully initialize (WASM loading)...');
+      
+      // Aguardar o elemento estar conectado ao DOM primeiro
+      if (jeepSqlite && !jeepSqlite.isConnected) {
+        logger.info('⏳ Waiting for jeep-sqlite element to be connected to DOM...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      // Aguardar um tempo significativo para o jeep-sqlite carregar o WASM completamente
+      // O jeep-sqlite carrega o sql.js e o WASM de forma assíncrona
+      // O erro "function import requires a callable" indica que o WASM ainda não está pronto
+      // Precisamos aguardar isso completar antes de chamar initWebStore()
+      logger.info('⏳ Waiting for WASM to load (this may take a few seconds)...');
+      await new Promise(resolve => setTimeout(resolve, 5000)); // Aumentado para 5 segundos
+      
+      // Aguardar mais um pouco para garantir que tudo está pronto
+      logger.info('⏳ Final initialization wait...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      logger.info('✅ jeep-sqlite should be ready now');
+      
+      // Inicializar Web Store APÓS o elemento estar totalmente pronto
+      // O initWebStore() precisa que o jeep-sqlite esteja totalmente inicializado
+      // e o WASM carregado com todas as funções disponíveis
+      logger.info('⏳ Initializing Web Store...');
+      try {
+        await sqliteConnection.initWebStore();
+        webStoreInitialized = true;
+        logger.info('✅ Web store initialized successfully');
+      } catch (initError) {
+        logger.error('❌ initWebStore failed, retrying after additional wait...', initError);
+        // Se falhar, aguardar mais e tentar novamente
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        try {
+          await sqliteConnection.initWebStore();
+          webStoreInitialized = true;
+          logger.info('✅ Web store initialized successfully (after retry)');
+        } catch (retryError) {
+          logger.error('❌ initWebStore failed even after retry:', retryError);
+          webStoreInitialized = false;
+        }
+      }
+    } catch (error) {
+      logger.error('❌ Failed to initialize jeep-sqlite:', error);
+      webStoreInitialized = false;
+    }
     
-    logger.info('✅ Web store initialized successfully');
+    // Se o web store não foi inicializado, não podemos usar SQLite na web
+    if (!webStoreInitialized) {
+      logger.warn('⚠️ Web store not initialized. SQLite will not be available on web platform.');
+      logger.warn('⚠️ App will work in degraded mode (no local persistence).');
+      // Lançar erro para que o initializeDatabase saiba que não pode continuar
+      throw new Error('Web store initialization failed - SQLite not available on web platform');
+    }
   }
 
   logger.info('✅ SQLite plugin initialized successfully');
@@ -468,7 +552,19 @@ export async function initializeDatabase(): Promise<SQLiteDBConnection> {
       logger.info('🚀 Starting database initialization...');
 
       // Initialize SQLite plugin
-      const connection = await initializeSQLitePlugin();
+      let connection: SQLiteConnection;
+      try {
+        connection = await initializeSQLitePlugin();
+      } catch (pluginError) {
+        // Na web, se o plugin falhar, não podemos continuar
+        if (Capacitor.getPlatform() === 'web') {
+          logger.error('❌ SQLite plugin initialization failed on web platform');
+          logger.warn('⚠️ Database will not be available. App will work in degraded mode.');
+          throw pluginError;
+        }
+        // Em outras plataformas, relançar o erro
+        throw pluginError;
+      }
 
       // Check if database already exists
       const dbExists = await checkDatabaseExists(connection);

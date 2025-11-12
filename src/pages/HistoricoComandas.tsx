@@ -449,131 +449,95 @@ const HistoricoComandas = () => {
       const qtdMin = filterQtdItensMin ? Number(filterQtdItensMin) : null;
       const qtdMax = filterQtdItensMax ? Number(filterQtdItensMax) : null;
 
-      // Tentar caminho A: query com embed de itens
-      let comandas: any[] = [];
-      let erroEmbed = false;
+      // Usar sempre 2 queries separadas para garantir que os itens sejam buscados corretamente
+      // Primeira query: comandas com filtros aplicados
+      let qComandas = client
+        .from('comanda')
+        .select('id,data,codigo,tipo,observacoes,total,criado_por');
 
-      try {
-        let q = client
-          .from('comanda')
-          .select('id,data,codigo,tipo,observacoes,total,item(id,material,kg_total,preco_kg,valor_total)');
-
-        // Aplicar filtros
-        if (tipoValue && (tipoValue === 'compra' || tipoValue === 'venda')) {
-          q = q.eq('tipo', tipoValue);
-        }
-        if (dataInicioISO) {
-          q = q.gte('data', dataInicioISO);
-        }
-        if (dataFimISO) {
-          q = q.lte('data', dataFimISO);
-        }
-        if (valorMin != null && Number.isFinite(valorMin)) {
-          q = q.gte('total', valorMin);
-        }
-        if (valorMax != null && Number.isFinite(valorMax)) {
-          q = q.lte('total', valorMax);
-        }
-
-        // Ordenação
-        q = q.order('data', { ascending: filterOrder === 'asc' });
-
-        const { data, error } = await q;
-
-        if (error) {
-          // Se erro de relacionamento, tentar caminho B
-          if (error.message?.includes('relation') || error.message?.includes('foreign')) {
-            erroEmbed = true;
-          } else {
-            throw error;
-          }
-        } else if (data) {
-          comandas = data;
-        }
-      } catch (err: any) {
-        // Se erro de relacionamento, tentar caminho B
-        if (err.message?.includes('relation') || err.message?.includes('foreign')) {
-          erroEmbed = true;
-        } else {
-          throw err;
-        }
+      // Aplicar filtros
+      if (tipoValue && (tipoValue === 'compra' || tipoValue === 'venda')) {
+        qComandas = qComandas.eq('tipo', tipoValue);
+      }
+      if (dataInicioISO) {
+        qComandas = qComandas.gte('data', dataInicioISO);
+      }
+      if (dataFimISO) {
+        qComandas = qComandas.lte('data', dataFimISO);
+      }
+      if (valorMin != null && Number.isFinite(valorMin)) {
+        qComandas = qComandas.gte('total', valorMin);
+      }
+      if (valorMax != null && Number.isFinite(valorMax)) {
+        qComandas = qComandas.lte('total', valorMax);
       }
 
-      // Caminho B: fallback com 2 queries
-      if (erroEmbed || comandas.length === 0) {
-        // Primeira query: comandas
-        let qComandas = client
-          .from('comanda')
-          .select('id,data,codigo,tipo,observacoes,total');
+      // Ordenação
+      qComandas = qComandas.order('data', { ascending: filterOrder === 'asc' });
 
-        if (tipoValue && (tipoValue === 'compra' || tipoValue === 'venda')) {
-          qComandas = qComandas.eq('tipo', tipoValue);
-        }
-        if (dataInicioISO) {
-          qComandas = qComandas.gte('data', dataInicioISO);
-        }
-        if (dataFimISO) {
-          qComandas = qComandas.lte('data', dataFimISO);
-        }
-        if (valorMin != null && Number.isFinite(valorMin)) {
-          qComandas = qComandas.gte('total', valorMin);
-        }
-        if (valorMax != null && Number.isFinite(valorMax)) {
-          qComandas = qComandas.lte('total', valorMax);
-        }
+      const { data: dataComandas, error: errComandas } = await qComandas;
 
-        qComandas = qComandas.order('data', { ascending: filterOrder === 'asc' });
+      if (errComandas) {
+        throw errComandas;
+      }
 
-        const { data: dataComandas, error: errComandas } = await qComandas;
+      if (!dataComandas || dataComandas.length === 0) {
+        setFilteredResults([]);
+        setFiltersOpen(false);
+        return;
+      }
 
-        if (errComandas) {
-          throw errComandas;
-        }
+      // Extrair IDs das comandas (garantir que são números)
+      const ids = dataComandas
+        .map((c: any) => {
+          const id = c?.id;
+          if (id == null) return null;
+          const numId = Number(id);
+          return !Number.isNaN(numId) ? numId : null;
+        })
+        .filter((id: any) => id != null) as number[];
 
-        if (!dataComandas || dataComandas.length === 0) {
-          setFilteredResults([]);
-          setFiltersOpen(false);
-          return;
-        }
+      if (ids.length === 0) {
+        setFilteredResults([]);
+        setFiltersOpen(false);
+        return;
+      }
 
-        const ids = dataComandas.map((c: any) => c.id).filter((id: any) => id != null);
+      // Segunda query: buscar todos os itens das comandas filtradas
+      // Usar .in() com array de números para buscar pela FK item.comanda
+      const { data: dataItens, error: errItens } = await client
+        .from('item')
+        .select('id,material,kg_total,preco_kg,valor_total,comanda')
+        .in('comanda', ids);
 
-        if (ids.length === 0) {
-          setFilteredResults([]);
-          setFiltersOpen(false);
-          return;
-        }
+      if (errItens) {
+        throw errItens;
+      }
 
-        // Segunda query: itens
-        const { data: dataItens, error: errItens } = await client
-          .from('item')
-          .select('id,material,kg_total,preco_kg,valor_total,comanda')
-          .in('comanda', ids);
-
-        if (errItens) {
-          throw errItens;
-        }
-
-        // Agrupar itens por comanda
-        const itensPorComanda: Record<number, any[]> = {};
-        if (dataItens) {
-          for (const item of dataItens) {
-            const comandaId = item.comanda;
-            if (comandaId != null) {
-              if (!itensPorComanda[comandaId]) {
-                itensPorComanda[comandaId] = [];
-              }
-              itensPorComanda[comandaId].push(item);
+      // Agrupar itens por comanda (usando a FK item.comanda)
+      const itensPorComanda: Record<string, any[]> = {};
+      if (dataItens && Array.isArray(dataItens)) {
+        for (const item of dataItens) {
+          // Converter comanda para string para usar como chave (mais seguro)
+          const comandaId = item.comanda != null ? String(item.comanda) : null;
+          if (comandaId != null && comandaId !== '') {
+            if (!itensPorComanda[comandaId]) {
+              itensPorComanda[comandaId] = [];
             }
+            itensPorComanda[comandaId].push(item);
           }
         }
-
-        // Anexar itens às comandas
-        comandas = dataComandas.map((c: any) => ({
-          ...c,
-          item: itensPorComanda[c.id] || [],
-        }));
       }
+
+      // Anexar itens às comandas
+      const comandas = dataComandas.map((c: any) => {
+        const comandaId = c.id != null ? String(c.id) : null;
+        const itens = comandaId != null ? (itensPorComanda[comandaId] || []) : [];
+        return {
+          ...c,
+          item: Array.isArray(itens) ? itens : [],
+        };
+      });
 
       // Filtrar por quantidade de itens (client-side)
       let filtered = comandas;
@@ -623,7 +587,7 @@ const HistoricoComandas = () => {
             codigo: r?.codigo ?? null,
             comanda_tipo: r?.tipo ?? null,
             observacoes: r?.observacoes ?? null,
-            criado_por: null,
+            criado_por: r?.criado_por ?? null,
             comanda_total,
             origem_offline: 0,
             __is_pending: false,
@@ -675,31 +639,72 @@ const HistoricoComandas = () => {
     const dateObj = group?.comanda_data ? new Date(group.comanda_data) : null;
     const dataStr = dateObj ? dateObj.toLocaleDateString() : null;
     const horaStr = dateObj ? dateObj.toLocaleTimeString() : null;
-    // Fetch material details for display (confirmed and pending items)
-    try {
-      const ids: number[] = Array.from(new Set(group.items.map((it: any) => Number(it.material_id)).filter((v: any) => Number.isFinite(v))));
-      if (ids.length > 0) {
-        const placeholders = ids.map(() => '?').join(', ');
-        const rows = await selectWhere<any>('material', `id IN (${placeholders})`, ids);
-        const map: Record<number, any> = {};
-        for (const r of rows) {
-          if (r && Number.isFinite(r.id)) map[Number(r.id)] = r;
-        }
-        setMaterialsById(map);
-      } else {
-        setMaterialsById({});
-      }
-    } catch {
-      setMaterialsById({});
-    }
-    // Load confirmed items from local 'item' table (LEFT JOIN-like behavior via two-step) and merge with pending items keyed by codigo
+    // Verificar se a comanda já tem itens (vindo de filteredResults)
+    const hasItemsFromFilter = group?.items && Array.isArray(group.items) && group.items.length > 0;
+    
     try {
       const resultItems: any[] = [];
-      const confirmedItemsLocal: any[] = [];
-      const pendingItemsLocal: any[] = [];
-      // Confirmed items via local SQLite comanda_20 snapshot (view pull) joined with material for names
-      const comandaId = group?.comanda_id ? Number(group.comanda_id) : NaN;
-      if (!Number.isNaN(comandaId) && comandaId) {
+      
+      if (hasItemsFromFilter) {
+        // Comanda vem de filteredResults - usar itens já presentes
+        // Apenas buscar nomes dos materiais para exibição
+        const materialIds = Array.from(new Set(
+          group.items
+            .map((it: any) => Number(it.material_id))
+            .filter((v: any) => Number.isFinite(v))
+        ));
+        
+        let materialMap: Record<number, any> = {};
+        if (materialIds.length > 0) {
+          try {
+            const placeholders = materialIds.map(() => '?').join(', ');
+            const mats = await selectWhere<any>('material', `id IN (${placeholders})`, materialIds);
+            materialMap = Object.fromEntries(mats.map((m: any) => [Number(m.id), m]));
+          } catch {}
+        }
+        
+        // Mapear itens do filtro para o formato esperado
+        for (const it of group.items) {
+          const matId = Number(it.material_id) || null;
+          const mat = matId ? materialMap[matId] : null;
+          resultItems.push({
+            material_id: matId,
+            material_nome: mat?.nome ?? '—',
+            material_categoria: mat?.categoria ?? '—',
+            kg_total: Number(it.kg_total ?? 0),
+            preco_kg: Number(it.preco_kg ?? 0),
+            item_valor_total: Number(it.item_valor_total ?? 0),
+            __source: it.__source ?? 'filtered',
+          });
+        }
+        
+        setMaterialsById(materialMap);
+        setSelectedGroup(prev => prev ? { ...prev, items: resultItems, __dispositivo: dispositivo } : { ...group, items: resultItems, __dispositivo: dispositivo });
+      } else {
+        // Comanda vem de rows (local) - buscar do SQLite como antes
+        // Fetch material details for display (confirmed and pending items)
+        try {
+          const ids: number[] = Array.from(new Set((group.items || []).map((it: any) => Number(it.material_id)).filter((v: any) => Number.isFinite(v))));
+          if (ids.length > 0) {
+            const placeholders = ids.map(() => '?').join(', ');
+            const rows = await selectWhere<any>('material', `id IN (${placeholders})`, ids);
+            const map: Record<number, any> = {};
+            for (const r of rows) {
+              if (r && Number.isFinite(r.id)) map[Number(r.id)] = r;
+            }
+            setMaterialsById(map);
+          } else {
+            setMaterialsById({});
+          }
+        } catch {
+          setMaterialsById({});
+        }
+        
+        const confirmedItemsLocal: any[] = [];
+        const pendingItemsLocal: any[] = [];
+        // Confirmed items via local SQLite comanda_20 snapshot (view pull) joined with material for names
+        const comandaId = group?.comanda_id ? Number(group.comanda_id) : NaN;
+        if (!Number.isNaN(comandaId) && comandaId) {
         try {
           const confirmedRows = await selectWhere<any>('comanda_20', 'comanda_id = ?', [comandaId]);
           const materialIds = Array.from(new Set(confirmedRows.map((r: any) => Number(r.material_id)).filter((v: any) => Number.isFinite(v))));
@@ -764,8 +769,9 @@ const HistoricoComandas = () => {
           }
         } catch {}
       }
-      // debug logging disabled for silent UX
-      setSelectedGroup(prev => prev ? { ...prev, items: resultItems, __dispositivo: dispositivo } : { ...group, items: resultItems, __dispositivo: dispositivo });
+        // debug logging disabled for silent UX
+        setSelectedGroup(prev => prev ? { ...prev, items: resultItems, __dispositivo: dispositivo } : { ...group, items: resultItems, __dispositivo: dispositivo });
+      }
     } catch {}
   }
 
