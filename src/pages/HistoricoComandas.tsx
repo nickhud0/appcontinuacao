@@ -358,27 +358,104 @@ const HistoricoComandas = () => {
       const client = status.isOnline && status.hasCredentials ? getSupabaseClient() : null;
       let remoteMapped: any[] = [];
       if (client) {
+        // Calcular data de 2 meses atrás (limite mínimo para todas as consultas)
+        const agora = new Date();
+        const doisMesesAtras = new Date(agora);
+        doisMesesAtras.setMonth(agora.getMonth() - 2);
+        const dataDoisMesesAtrasISO = doisMesesAtras.toISOString();
+
         const like = `%${needle}%`;
+        // Primeira query: buscar comandas com filtro de busca e limite de 2 meses
         const query = client
           .from('comanda')
-          .select('id,data,codigo,tipo,observacoes,total')
+          .select('id,data,codigo,tipo,observacoes,total,criado_por')
           .or(`codigo.ilike.${like},observacoes.ilike.${like}`)
+          .gte('data', dataDoisMesesAtrasISO)
           .order('data', { ascending: false });
-        const { data, error } = await query;
-        if (!error && Array.isArray(data)) {
-          remoteMapped = data.map((r: any) => ({
-            comanda_id: r.id,
-            comanda_data: r.data,
-            codigo: r.codigo,
-            comanda_tipo: r.tipo,
-            observacoes: r.observacoes ?? null,
-            comanda_total: r.total ?? 0,
-            origem_offline: 0,
-            __is_pending: false,
-            items: []
-          }))
-          // Additional client-side date match (for date search text)
-          .filter((g: any) => rowMatchesTerm(g, needle));
+        
+        const { data: dataComandas, error: errComandas } = await query;
+        
+        if (!errComandas && Array.isArray(dataComandas) && dataComandas.length > 0) {
+          // Extrair IDs das comandas
+          const ids = dataComandas
+            .map((c: any) => {
+              const id = c?.id;
+              if (id == null) return null;
+              const numId = Number(id);
+              return !Number.isNaN(numId) ? numId : null;
+            })
+            .filter((id: any) => id != null) as number[];
+
+          // Segunda query: buscar todos os itens das comandas encontradas
+          let itensPorComanda: Record<string, any[]> = {};
+          if (ids.length > 0) {
+            const { data: dataItens, error: errItens } = await client
+              .from('item')
+              .select('id,material,kg_total,preco_kg,valor_total,comanda')
+              .in('comanda', ids);
+
+            if (!errItens && dataItens && Array.isArray(dataItens)) {
+              // Agrupar itens por comanda
+              for (const item of dataItens) {
+                const comandaId = item.comanda != null ? String(item.comanda) : null;
+                if (comandaId != null && comandaId !== '') {
+                  if (!itensPorComanda[comandaId]) {
+                    itensPorComanda[comandaId] = [];
+                  }
+                  itensPorComanda[comandaId].push(item);
+                }
+              }
+            }
+          }
+
+          // Mapear comandas com seus itens
+          remoteMapped = dataComandas
+            .map((r: any) => {
+              if (!r?.id || Number.isNaN(Number(r.id))) return null;
+
+              const comandaId = r.id != null ? String(r.id) : null;
+              const itens = comandaId != null ? (itensPorComanda[comandaId] || []) : [];
+              
+              const itemsMapped = itens.map((it: any) => ({
+                item_id: it?.id ?? null,
+                material_id: it?.material ?? null,
+                kg_total: Number(it?.kg_total ?? 0),
+                preco_kg: Number(it?.preco_kg ?? 0),
+                item_valor_total: Number(it?.valor_total ?? 0),
+                __source: 'search' as const,
+              }));
+
+              const comanda_total = itemsMapped.reduce(
+                (acc: number, it: any) => acc + (Number(it.item_valor_total) || 0),
+                0
+              );
+
+              let comanda_data: string | null = null;
+              if (r?.data) {
+                try {
+                  const d = new Date(r.data);
+                  if (!Number.isNaN(d.getTime())) {
+                    comanda_data = d.toISOString();
+                  }
+                } catch {}
+              }
+
+              return {
+                comanda_id: Number(r.id),
+                comanda_data,
+                codigo: r?.codigo ?? null,
+                comanda_tipo: r?.tipo ?? null,
+                observacoes: r?.observacoes ?? null,
+                criado_por: r?.criado_por ?? null,
+                comanda_total,
+                origem_offline: 0,
+                __is_pending: false,
+                items: itemsMapped,
+              };
+            })
+            .filter(Boolean)
+            // Additional client-side date match (for date search text)
+            .filter((g: any) => rowMatchesTerm(g, needle));
         }
       }
 
@@ -455,12 +532,27 @@ const HistoricoComandas = () => {
         .from('comanda')
         .select('id,data,codigo,tipo,observacoes,total,criado_por');
 
+      // Calcular data de 2 meses atrás (limite mínimo para todas as consultas)
+      const agora = new Date();
+      const doisMesesAtras = new Date(agora);
+      doisMesesAtras.setMonth(agora.getMonth() - 2);
+      const dataDoisMesesAtrasISO = doisMesesAtras.toISOString();
+
+      // Aplicar limite de 2 meses: sempre filtrar comandas dos últimos 2 meses
+      // Se o usuário especificou uma data início maior que 2 meses atrás, usar a maior entre as duas
+      let dataInicioFinal: string | null = null;
+      if (dataInicioISO) {
+        // Usar a maior entre a data início especificada e 2 meses atrás
+        dataInicioFinal = dataInicioISO > dataDoisMesesAtrasISO ? dataInicioISO : dataDoisMesesAtrasISO;
+      } else {
+        // Se não especificou data início, usar apenas o limite de 2 meses
+        dataInicioFinal = dataDoisMesesAtrasISO;
+      }
+      qComandas = qComandas.gte('data', dataInicioFinal);
+
       // Aplicar filtros
       if (tipoValue && (tipoValue === 'compra' || tipoValue === 'venda')) {
         qComandas = qComandas.eq('tipo', tipoValue);
-      }
-      if (dataInicioISO) {
-        qComandas = qComandas.gte('data', dataInicioISO);
       }
       if (dataFimISO) {
         qComandas = qComandas.lte('data', dataFimISO);
