@@ -532,23 +532,27 @@ const HistoricoComandas = () => {
         .from('comanda')
         .select('id,data,codigo,tipo,observacoes,total,criado_por');
 
-      // Calcular data de 2 meses atrás (limite mínimo para todas as consultas)
-      const agora = new Date();
-      const doisMesesAtras = new Date(agora);
-      doisMesesAtras.setMonth(agora.getMonth() - 2);
-      const dataDoisMesesAtrasISO = doisMesesAtras.toISOString();
-
-      // Aplicar limite de 2 meses: sempre filtrar comandas dos últimos 2 meses
-      // Se o usuário especificou uma data início maior que 2 meses atrás, usar a maior entre as duas
-      let dataInicioFinal: string | null = null;
+      // Aplicar filtro de data início
+      // Se o usuário especificou data início ou fim, respeitar essas datas (ignorar limite de 2 meses)
+      // Caso contrário, aplicar limite de 2 meses para performance
       if (dataInicioISO) {
-        // Usar a maior entre a data início especificada e 2 meses atrás
-        dataInicioFinal = dataInicioISO > dataDoisMesesAtrasISO ? dataInicioISO : dataDoisMesesAtrasISO;
+        // Usuário especificou data início - respeitar essa data (sem limite de 2 meses)
+        qComandas = qComandas.gte('data', dataInicioISO);
+      } else if (dataFimISO) {
+        // Usuário especificou apenas data fim - aplicar limite de 2 meses como mínimo
+        const agora = new Date();
+        const doisMesesAtras = new Date(agora);
+        doisMesesAtras.setMonth(agora.getMonth() - 2);
+        const dataDoisMesesAtrasISO = doisMesesAtras.toISOString();
+        qComandas = qComandas.gte('data', dataDoisMesesAtrasISO);
       } else {
-        // Se não especificou data início, usar apenas o limite de 2 meses
-        dataInicioFinal = dataDoisMesesAtrasISO;
+        // Nenhuma data especificada - aplicar limite de 2 meses
+        const agora = new Date();
+        const doisMesesAtras = new Date(agora);
+        doisMesesAtras.setMonth(agora.getMonth() - 2);
+        const dataDoisMesesAtrasISO = doisMesesAtras.toISOString();
+        qComandas = qComandas.gte('data', dataDoisMesesAtrasISO);
       }
-      qComandas = qComandas.gte('data', dataInicioFinal);
 
       // Aplicar filtros
       if (tipoValue && (tipoValue === 'compra' || tipoValue === 'venda')) {
