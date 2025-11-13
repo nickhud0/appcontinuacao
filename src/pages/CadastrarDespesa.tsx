@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { addToSyncQueue, selectAll, selectWhere } from "@/database";
 import { triggerSyncNow } from "@/services/syncEngine";
@@ -31,6 +31,9 @@ const CadastrarDespesa = () => {
   const [lista, setLista] = useState<any[]>([]);
   const [carregandoLista, setCarregandoLista] = useState(true);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const descricaoInputRef = useRef<HTMLInputElement>(null);
+  const valorInputRef = useRef<HTMLInputElement>(null);
+  const justOpenedPopupRef = useRef(false);
 
   async function handleSalvar() {
     if (!descricao.trim() || !valor) {
@@ -67,6 +70,10 @@ const CadastrarDespesa = () => {
       setValor("");
       // Atualiza a lista para exibir o item pendente recém adicionado
       void loadLista();
+      // Focar novamente no campo Descrição após salvar
+      setTimeout(() => {
+        descricaoInputRef.current?.focus();
+      }, 100);
     } catch (error) {
       toast({ title: 'Erro ao salvar', variant: 'destructive' });
     } finally {
@@ -86,6 +93,11 @@ const CadastrarDespesa = () => {
       return;
     }
     setConfirmOpen(true);
+    // Marca que acabamos de abrir o popup para evitar que o Enter acione imediatamente
+    justOpenedPopupRef.current = true;
+    setTimeout(() => {
+      justOpenedPopupRef.current = false;
+    }, 100);
   }
 
   async function loadLista() {
@@ -132,16 +144,22 @@ const CadastrarDespesa = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { void loadLista(); }, []);
 
-  // Atalhos de teclado
+  // Focar no campo Descrição ao abrir a tela
+  useEffect(() => {
+    if (descricaoInputRef.current) {
+      descricaoInputRef.current.focus();
+    }
+  }, []);
+
+  // Atalhos de teclado (apenas quando popup está aberto)
   useGlobalShortcuts({
-    // Enter no modal (apenas quando aberto)
-    ...(confirmOpen ? {
-      "enter": () => {
-        if (!salvando && descricao.trim() && valor) {
-          handleSalvar();
-        }
+    "enter": () => {
+      // Enter no popup: confirmar (salvar)
+      // Ignora se acabamos de abrir o popup (para evitar acionar ambos os botões)
+      if (confirmOpen && !justOpenedPopupRef.current && !salvando && descricao.trim() && valor) {
+        handleSalvar();
       }
-    } : {}),
+    },
     "-": () => navigate(-1)
   });
 
@@ -167,11 +185,40 @@ const CadastrarDespesa = () => {
         <div className="grid grid-cols-1 gap-4">
           <div>
             <Label htmlFor="descricao">Descrição</Label>
-            <Input id="descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} className="mt-1" />
+            <Input 
+              id="descricao" 
+              ref={descricaoInputRef}
+              value={descricao} 
+              onChange={(e) => setDescricao(e.target.value)} 
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  valorInputRef.current?.focus();
+                }
+              }}
+              className="mt-1" 
+            />
           </div>
           <div>
             <Label htmlFor="valor">Valor (R$)</Label>
-            <Input id="valor" type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1" />
+            <Input 
+              id="valor" 
+              ref={valorInputRef}
+              type="number" 
+              step="0.01" 
+              value={valor} 
+              onChange={(e) => setValor(e.target.value)} 
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!confirmOpen) {
+                    handleOpenConfirm();
+                  }
+                }
+              }}
+              className="mt-1" 
+            />
           </div>
 
           <Button onClick={handleOpenConfirm} disabled={salvando} className="w-full">

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { insert, addToSyncQueue, selectAll, selectWhere, update as dbUpdate, deleteFrom } from "@/database";
 import { getSyncStatus, triggerSyncNow } from "@/services/syncEngine";
@@ -49,6 +49,21 @@ const Pendencias = () => {
   // Estados para exclusão
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [pendenciaParaExcluir, setPendenciaParaExcluir] = useState<any | null>(null);
+  const [confirmDeleteText, setConfirmDeleteText] = useState("");
+
+  // Refs para os campos do formulário
+  const nomeInputRef = useRef<HTMLInputElement>(null);
+  const valorInputRef = useRef<HTMLInputElement>(null);
+  const observacaoInputRef = useRef<HTMLInputElement>(null);
+  const tipoDevemosButtonRef = useRef<HTMLButtonElement>(null);
+  
+  // Refs para os campos do popup de edição
+  const editNomeInputRef = useRef<HTMLInputElement>(null);
+  const editValorInputRef = useRef<HTMLInputElement>(null);
+  const editObservacaoInputRef = useRef<HTMLInputElement>(null);
+  
+  // Ref para o campo de confirmação de exclusão
+  const confirmDeleteInputRef = useRef<HTMLInputElement>(null);
 
   async function loadItems() {
     try {
@@ -95,6 +110,40 @@ const Pendencias = () => {
     void loadItems();
   }, []);
 
+  // Focar no campo Nome ao abrir a tela
+  useEffect(() => {
+    if (nomeInputRef.current) {
+      nomeInputRef.current.focus();
+    }
+  }, []);
+
+  // Focar no primeiro botão do Dialog do Tipo quando abrir
+  useEffect(() => {
+    if (isTipoDialogOpen && tipoDevemosButtonRef.current) {
+      setTimeout(() => {
+        tipoDevemosButtonRef.current?.focus();
+      }, 100);
+    }
+  }, [isTipoDialogOpen]);
+
+  // Focar no campo Valor (R$) quando o popup de edição abrir
+  useEffect(() => {
+    if (isEditDialogOpen && editValorInputRef.current) {
+      setTimeout(() => {
+        editValorInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isEditDialogOpen]);
+
+  // Focar no campo de confirmação quando o popup de exclusão abrir
+  useEffect(() => {
+    if (confirmDeleteOpen && confirmDeleteInputRef.current) {
+      setTimeout(() => {
+        confirmDeleteInputRef.current?.focus();
+      }, 150);
+    }
+  }, [confirmDeleteOpen]);
+
   // Atalhos de teclado
   useGlobalShortcuts({
     // Enter nos modais (apenas quando aberto)
@@ -111,11 +160,6 @@ const Pendencias = () => {
       "enter": async () => {
         await handleSalvarEdicao();
         setConfirmEditOpen(false);
-      }
-    } : {}),
-    ...(confirmDeleteOpen && pendenciaParaExcluir ? {
-      "enter": () => {
-        handleConfirmarExclusao();
       }
     } : {}),
     "-": () => navigate(-1)
@@ -148,6 +192,10 @@ const Pendencias = () => {
       setValor("");
       setObservacao("");
       await loadItems();
+      // Focar novamente no campo Nome após salvar
+      setTimeout(() => {
+        nomeInputRef.current?.focus();
+      }, 100);
     } catch (error) {
       toast({ title: 'Erro ao salvar', variant: 'destructive' });
     } finally {
@@ -263,11 +311,22 @@ const Pendencias = () => {
   // Função para abrir modal de exclusão
   function handleAbrirExclusao(p: any) {
     setPendenciaParaExcluir(p);
+    setConfirmDeleteText("");
     setConfirmDeleteOpen(true);
   }
 
   // Função para confirmar exclusão
   async function handleConfirmarExclusao() {
+    // Validar se o texto de confirmação está correto
+    if (confirmDeleteText.trim() !== "Excluir") {
+      toast({ 
+        title: 'Confirmação necessária', 
+        description: 'Por favor, digite "Excluir" para confirmar a exclusão.', 
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     try {
       const p = pendenciaParaExcluir;
       
@@ -294,6 +353,7 @@ const Pendencias = () => {
 
       setConfirmDeleteOpen(false);
       setPendenciaParaExcluir(null);
+      setConfirmDeleteText("");
     } catch (error) {
       toast({ title: 'Erro ao excluir pendência', variant: 'destructive' });
     }
@@ -321,11 +381,44 @@ const Pendencias = () => {
         <div className="grid grid-cols-1 gap-3 sm:gap-4 mb-4">
           <div>
             <Label htmlFor="nome">Nome</Label>
-            <Input id="nome" value={nome} onChange={(e) => setNome(e.target.value)} className="mt-1" />
+            <Input 
+              id="nome" 
+              ref={nomeInputRef}
+              value={nome} 
+              onChange={(e) => setNome(e.target.value)} 
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  valorInputRef.current?.focus();
+                }
+              }}
+              className="mt-1" 
+            />
           </div>
           <div>
             <Label htmlFor="valor">Valor (R$)</Label>
-            <Input id="valor" type="number" step="0.01" value={valor} onChange={(e) => setValor(e.target.value)} className="mt-1" />
+            <Input 
+              id="valor" 
+              ref={valorInputRef}
+              type="number" 
+              step="0.01" 
+              value={valor} 
+              onChange={(e) => setValor(e.target.value)} 
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsTipoDialogOpen(true);
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  nomeInputRef.current?.focus();
+                } else if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  observacaoInputRef.current?.focus();
+                }
+              }}
+              className="mt-1" 
+            />
           </div>
           <div>
             <Label>Tipo</Label>
@@ -341,7 +434,22 @@ const Pendencias = () => {
           </div>
           <div>
             <Label htmlFor="obs">Observação (opcional)</Label>
-            <Input id="obs" value={observacao} onChange={(e) => setObservacao(e.target.value)} className="mt-1" />
+            <Input 
+              id="obs" 
+              ref={observacaoInputRef}
+              value={observacao} 
+              onChange={(e) => setObservacao(e.target.value)} 
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (nome.trim() && valor) {
+                    handleSalvar();
+                  }
+                }
+              }}
+              className="mt-1" 
+            />
           </div>
           <Button onClick={handleSalvar} disabled={salvando} className="w-full">
             {salvando ? 'Salvando...' : 'Salvar Pendência'}
@@ -453,16 +561,51 @@ const Pendencias = () => {
           </DialogHeader>
           <div className="space-y-2 mt-2">
             <Button
+              ref={tipoDevemosButtonRef}
               variant={tipo === 'a_pagar' ? 'secondary' : 'ghost'}
               className="w-full justify-start rounded-lg text-left text-sm sm:text-base"
-              onClick={() => { setTipo('a_pagar'); setIsTipoDialogOpen(false); }}
+              onClick={() => { 
+                setTipo('a_pagar'); 
+                setIsTipoDialogOpen(false);
+                // Focar no campo Observacao após selecionar
+                setTimeout(() => {
+                  observacaoInputRef.current?.focus();
+                }, 100);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setTipo('a_pagar');
+                  setIsTipoDialogOpen(false);
+                  setTimeout(() => {
+                    observacaoInputRef.current?.focus();
+                  }, 100);
+                }
+              }}
             >
               Devemos
             </Button>
             <Button
               variant={tipo === 'a_receber' ? 'secondary' : 'ghost'}
               className="w-full justify-start rounded-lg text-left text-sm sm:text-base"
-              onClick={() => { setTipo('a_receber'); setIsTipoDialogOpen(false); }}
+              onClick={() => { 
+                setTipo('a_receber'); 
+                setIsTipoDialogOpen(false);
+                // Focar no campo Observacao após selecionar
+                setTimeout(() => {
+                  observacaoInputRef.current?.focus();
+                }, 100);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  setTipo('a_receber');
+                  setIsTipoDialogOpen(false);
+                  setTimeout(() => {
+                    observacaoInputRef.current?.focus();
+                  }, 100);
+                }
+              }}
             >
               Nos Deve
             </Button>
@@ -484,8 +627,15 @@ const Pendencias = () => {
               <Label htmlFor="edit-nome">Nome</Label>
               <Input 
                 id="edit-nome" 
+                ref={editNomeInputRef}
                 value={editNome} 
                 onChange={(e) => setEditNome(e.target.value)} 
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    editValorInputRef.current?.focus();
+                  }
+                }}
                 className="mt-1" 
               />
             </div>
@@ -493,10 +643,26 @@ const Pendencias = () => {
               <Label htmlFor="edit-valor">Valor (R$)</Label>
               <Input 
                 id="edit-valor" 
+                ref={editValorInputRef}
                 type="number" 
                 step="0.01" 
                 value={editValor} 
                 onChange={(e) => setEditValor(e.target.value)} 
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (editNome.trim() && editValor) {
+                      setConfirmEditOpen(true);
+                    }
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    editNomeInputRef.current?.focus();
+                  } else if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    editObservacaoInputRef.current?.focus();
+                  }
+                }}
                 className="mt-1" 
               />
             </div>
@@ -516,8 +682,21 @@ const Pendencias = () => {
               <Label htmlFor="edit-obs">Observação (opcional)</Label>
               <Input 
                 id="edit-obs" 
+                ref={editObservacaoInputRef}
                 value={editObservacao} 
                 onChange={(e) => setEditObservacao(e.target.value)} 
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (editNome.trim() && editValor) {
+                      setConfirmEditOpen(true);
+                    }
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    editValorInputRef.current?.focus();
+                  }
+                }}
                 className="mt-1" 
               />
             </div>
@@ -595,7 +774,12 @@ const Pendencias = () => {
       </AlertDialog>
 
       {/* Confirmação de Exclusão */}
-      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={(open) => {
+        setConfirmDeleteOpen(open);
+        if (!open) {
+          setConfirmDeleteText("");
+        }
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Tem certeza que deseja remover esta pendência?</AlertDialogTitle>
@@ -611,13 +795,35 @@ const Pendencias = () => {
               <div className="mt-3 text-sm text-red-600">
                 Esta ação não pode ser desfeita.
               </div>
+              <div className="mt-4">
+                <Label htmlFor="confirm-delete-text" className="text-sm font-medium">
+                  Digite "Excluir" para confirmar:
+                </Label>
+                <Input
+                  id="confirm-delete-text"
+                  ref={confirmDeleteInputRef}
+                  value={confirmDeleteText}
+                  onChange={(e) => setConfirmDeleteText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleConfirmarExclusao();
+                    }
+                  }}
+                  className="mt-1"
+                  placeholder="Excluir"
+                  autoFocus
+                />
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => setConfirmDeleteText("")}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmarExclusao}
               className="bg-red-600 hover:bg-red-700"
+              disabled={confirmDeleteText.trim() !== "Excluir"}
             >
               Confirmar Exclusão
             </AlertDialogAction>

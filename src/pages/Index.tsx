@@ -46,6 +46,11 @@ const Index = () => {
     "3": () => navigate("/cadastrar-despesa"),
     "4": () => navigate("/pendencias"),
     "5": () => navigate("/relatorios"),
+    "6": () => navigate("/tabela-precos"),
+    "7": () => navigate("/historico-comandas"),
+    "8": () => navigate("/vale"),
+    "9": () => navigate("/configuracoes"),
+    "0": () => navigate("/estoque"),
     "/": () => navigate("/preview-comanda"),
     "-": () => navigate(-1)
   });
