@@ -1,13 +1,13 @@
-import { ArrowLeft, Package, Search, CloudOff } from "lucide-react";
+import { ArrowLeft, Package, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { selectAll, executeQuery } from "@/database";
-import { formatCurrency, formatWeight, formatDateTime } from "@/utils/formatters";
+import { selectAll } from "@/database";
+import { formatCurrency, formatWeight } from "@/utils/formatters";
 import { onSyncStatus, type SyncStatus } from "@/services/syncEngine";
-import type { Estoque as EstoqueRow } from "@/database";
+import type { Estoque as EstoqueRow, Material } from "@/database";
 import { useGlobalShortcuts } from "@/shortcuts";
 
 const Estoque = () => {
@@ -18,30 +18,17 @@ const Estoque = () => {
   });
 
   const [estoque, setEstoque] = useState<EstoqueRow[]>([]);
+  const [materiais, setMateriais] = useState<Material[]>([]);
   const [busca, setBusca] = useState("");
   const [loading, setLoading] = useState(true);
-  type ResumoEstoqueFinanceiro = {
-    total_kg: number | null;
-    total_custo: number | null;
-    total_venda_potencial: number | null;
-    lucro_potencial: number | null;
-    updated_at?: string | null;
-  };
-  const [resumo, setResumo] = useState<ResumoEstoqueFinanceiro | null>(null);
-  
 
   const refresh = useCallback(async () => {
     const rows = await selectAll<EstoqueRow>('estoque', 'material ASC');
     setEstoque(rows);
-
-    try {
-      const resumoRows = await executeQuery<ResumoEstoqueFinanceiro>(
-        'SELECT total_kg, total_custo, total_venda_potencial, lucro_potencial, updated_at FROM resumo_estoque_financeiro LIMIT 1'
-      );
-      setResumo(resumoRows[0] ?? null);
-    } catch {
-      setResumo(null);
-    }
+    
+    // Buscar materiais para ter acesso aos preços de venda
+    const materiaisRows = await selectAll<Material>('material', 'nome ASC');
+    setMateriais(materiaisRows);
   }, []);
 
   useEffect(() => {
@@ -73,6 +60,45 @@ const Estoque = () => {
     const q = busca.toLowerCase();
     return estoque.filter((e) => (e.material || '').toLowerCase().includes(q));
   }, [estoque, busca]);
+
+  // Calcular resumo financeiro baseado nos dados do estoque e materiais
+  const resumo = useMemo(() => {
+    // Criar um mapa de materiais por nome para busca rápida de preços
+    const materiaisMap = new Map<string, number>();
+    materiais.forEach((m) => {
+      if (m.nome) {
+        materiaisMap.set(m.nome, m.preco_venda || 0);
+      }
+    });
+
+    // Calcular KG: soma de todos os kg_total
+    const totalKg = estoque.reduce((sum, item) => {
+      return sum + (item.kg_total || 0);
+    }, 0);
+
+    // Calcular CUSTO: soma de todos os valor_total_gasto
+    const totalCusto = estoque.reduce((sum, item) => {
+      return sum + (item.valor_total_gasto || 0);
+    }, 0);
+
+    // Calcular POTENCIAL: para cada material, preco_venda * kg_total, depois somar tudo
+    const totalPotencial = estoque.reduce((sum, item) => {
+      if (!item.material) return sum;
+      const precoVenda = materiaisMap.get(item.material) || 0;
+      const kgTotal = item.kg_total || 0;
+      return sum + (precoVenda * kgTotal);
+    }, 0);
+
+    // Calcular LUCRO: POTENCIAL - CUSTO
+    const lucroPotencial = totalPotencial - totalCusto;
+
+    return {
+      total_kg: totalKg,
+      total_custo: totalCusto,
+      total_venda_potencial: totalPotencial,
+      lucro_potencial: lucroPotencial,
+    };
+  }, [estoque, materiais]);
 
   const StatBlock = ({ title, value = "—", valueClassName, titleClassName, cardClassName }: { title: string; value?: string | number; valueClassName?: string; titleClassName?: string; cardClassName?: string }) => {
     return (
@@ -119,59 +145,49 @@ const Estoque = () => {
         <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3">
           <StatBlock
             title="KG"
-            value={resumo?.total_kg != null ? formatWeight(Number(resumo.total_kg) || 0) : '—'}
+            value={formatWeight(resumo.total_kg)}
             titleClassName="text-blue-300"
             cardClassName="bg-blue-500/10"
           />
           <StatBlock
             title="Custo"
-            value={resumo?.total_custo != null ? formatCurrency(Number(resumo.total_custo) || 0) : '—'}
+            value={formatCurrency(resumo.total_custo)}
             titleClassName="text-red-300"
             cardClassName="bg-red-500/10"
           />
           <StatBlock
             title="Potencial"
-            value={resumo?.total_venda_potencial != null ? formatCurrency(Number(resumo.total_venda_potencial) || 0) : '—'}
+            value={formatCurrency(resumo.total_venda_potencial)}
             titleClassName="text-emerald-300"
             cardClassName="bg-emerald-500/10"
           />
           <StatBlock
             title="Lucro"
-            value={resumo?.lucro_potencial != null ? formatCurrency(Number(resumo.lucro_potencial) || 0) : '—'}
+            value={formatCurrency(resumo.lucro_potencial)}
             valueClassName={
-              resumo?.lucro_potencial == null
-                ? 'text-muted-foreground'
-                : Number(resumo.lucro_potencial) > 0
-                  ? 'text-emerald-500'
-                  : Number(resumo.lucro_potencial) < 0
-                    ? 'text-red-500'
-                    : 'text-muted-foreground'
+              resumo.lucro_potencial > 0
+                ? 'text-emerald-500'
+                : resumo.lucro_potencial < 0
+                  ? 'text-red-500'
+                  : 'text-muted-foreground'
             }
             titleClassName={
-              resumo?.lucro_potencial == null
-                ? ''
-                : Number(resumo.lucro_potencial) > 0
-                  ? 'text-emerald-300'
-                  : Number(resumo.lucro_potencial) < 0
-                    ? 'text-red-300'
-                    : ''
+              resumo.lucro_potencial > 0
+                ? 'text-emerald-300'
+                : resumo.lucro_potencial < 0
+                  ? 'text-red-300'
+                  : ''
             }
             cardClassName={
-              resumo?.lucro_potencial == null
-                ? 'bg-card'
-                : Number(resumo.lucro_potencial) > 0
-                  ? 'bg-emerald-500/10'
-                  : Number(resumo.lucro_potencial) < 0
-                    ? 'bg-red-500/10'
-                    : 'bg-card'
+              resumo.lucro_potencial > 0
+                ? 'bg-emerald-500/10'
+                : resumo.lucro_potencial < 0
+                  ? 'bg-red-500/10'
+                  : 'bg-card'
             }
           />
         </div>
-        {resumo?.updated_at ? (
-          <div className="text-xs text-muted-foreground px-3 mt-2 mb-3">Atualizado em: {formatDateTime(resumo.updated_at)}</div>
-        ) : (
-          <div className="mb-3" />
-        )}
+        <div className="mb-3" />
 
         {/* Título Materiais */}
         <h2 className="text-lg font-bold text-foreground px-3 mt-2 mb-2">Materiais em Estoque</h2>
